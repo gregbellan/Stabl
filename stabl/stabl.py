@@ -978,23 +978,22 @@ class STABL(SelectorMixin, BaseEstimator):
 
         """
         FDPs = []  # Initializing false discovery proportions
-        for thresh in thresholds_grid:
-            FP = np.sum((1 / artificial_proportion) * (max_scores_artificial > thresh))
-            TP = np.sum((max_scores > thresh))
+        artificial_proportion = self.artificial_proportion
+        max_scores_artificial = np.max(self.stability_scores_artificial_, axis=1)
+        max_scores = np.max(self.stability_scores_, axis=1)
 
-            if TP == 0 and FP == 0:
-                FDP = 1.
-            else:
-                FDP = (FP + 1) / (FP + TP)
-
+        for thresh in self.fdr_threshold_range:
+            num = np.sum((1 / artificial_proportion) * (max_scores_artificial > thresh)) + 1
+            denum = max([1, np.sum((max_scores > thresh))])
+            FDP = num / denum
             FDPs.append(FDP)
 
         self.FDRs_ = FDPs
         self.min_fdr_ = np.min(FDPs)
 
-        if self.min_fdr_ > 0.5:
+        if self.min_fdr_ > 1.:
             final_cutoff = 1.
         else:
-            final_cutoff = np.min([thresholds_grid[np.argmin(self.FDRs_)], 1])
+            final_cutoff = np.min([self.fdr_threshold_range[np.argmin(self.FDRs_)], 1])
 
         self.fdr_min_threshold_ = final_cutoff
