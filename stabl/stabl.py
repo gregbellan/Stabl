@@ -15,7 +15,7 @@ from sklearn.utils.class_weight import compute_sample_weight
 from sklearn.utils.validation import _check_feature_names_in, check_is_fitted
 from tqdm import tqdm
 
-from visualization import boxplot_features, scatterplot_features
+from .visualization import boxplot_features, scatterplot_features
 
 
 def classic_bootstrap(y, n_subsamples, replace=True, class_weight=None, rng=np.random.default_rng(None)):

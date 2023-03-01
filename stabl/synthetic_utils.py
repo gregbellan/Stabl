@@ -640,7 +640,7 @@ def synthetic_benchmark_regression(
 
                 df_thresholds[f"NbSamples={n_samples}"] = all_threshold_stabl
                 fdr_path = f'./{result_folder_title}/NbFeatures={n_features}_NbInfo={n_info}/FDR graphs/' \
-                           f'NbSamples={n_samples}.pdf '
+                           f'NbSamples={n_samples}.pdf'
                 save_fdr_figures(true_FDRs_decoy, estimated_FDRs_decoy, fdr_path)
 
                 scores_path = f"./{result_folder_title}/NbFeatures={n_features}_NbInfo={n_info}/Scores"
