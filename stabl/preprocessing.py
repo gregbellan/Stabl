@@ -11,12 +11,12 @@ class LowInfoFilter(SelectorMixin, BaseEstimator):
     desired outputs (y), and can thus be used for unsupervised learning.
 
     A feature is considered to be a low info one if the proportion of nan
-    values is above a given threshold set by the user.
+    values is above a given hard_threshold set by the user.
 
     Parameters
     ----------
     max_nan_fraction : float, default=0.2
-        Features with a proportion of nan values greater than this threshold will
+        Features with a proportion of nan values greater than this hard_threshold will
         be removed. By default, the proportion is set to 0.2.
 
     Attributes
@@ -34,7 +34,7 @@ class LowInfoFilter(SelectorMixin, BaseEstimator):
     Notes
     -----
     Allows NaN in the input.
-    Raises ValueError if no feature in X meets the low info threshold.
+    Raises ValueError if no feature in X meets the low info hard_threshold.
     """
 
     def __init__(self, max_nan_fraction=0.2):
@@ -76,7 +76,7 @@ class LowInfoFilter(SelectorMixin, BaseEstimator):
 
         if np.all(~np.isfinite(self.nan_counts_) | (
                 self.nan_counts_ > self.max_nan_fraction * self.n_samples)):
-            msg = "No feature in X meets the low info threshold {0:.5f}"
+            msg = "No feature in X meets the low info hard_threshold {0:.5f}"
             if self.n_samples == 1:
                 msg += " (X contains only one sample)"
             raise ValueError(msg.format(self.max_nan_fraction))

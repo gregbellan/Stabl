@@ -114,7 +114,7 @@ def export_stabl_to_csv(stabl, path):
     path: str or Path
         The path where csv files will be saved
     """
-    check_is_fitted(stabl, 'stability_scores_')
+    check_is_fitted(stabl, 'stabl_scores_')
 
     if hasattr(stabl, 'feature_names_in_'):
         X_columns = stabl.feature_names_in_
@@ -123,11 +123,11 @@ def export_stabl_to_csv(stabl, path):
 
     columns = [f"{stabl.lambda_name}'='{col: .3f}" for col in stabl.lambda_grid]
 
-    df_real = pd.DataFrame(data=stabl.stability_scores_, index=X_columns, columns=columns)
+    df_real = pd.DataFrame(data=stabl.stabl_scores_, index=X_columns, columns=columns)
     df_real.to_csv(Path(path, 'Stabl scores.csv'))
 
     df_max_probs = pd.DataFrame(
-        data={"Max Proba": stabl.stability_scores_.max(axis=1)},
+        data={"Max Proba": stabl.stabl_scores_.max(axis=1)},
         index=X_columns
     )
     df_max_probs = df_max_probs.sort_values(by='Max Proba', ascending=False)
@@ -137,13 +137,13 @@ def export_stabl_to_csv(stabl, path):
         synthetic_index = [f'col_synthetic_{i + 1}' for i in range(stabl.X_artificial_.shape[1])]
 
         df_noise = pd.DataFrame(
-            data=stabl.stability_scores_artificial_,
+            data=stabl.stabl_scores_artificial_,
             index=synthetic_index,
             columns=columns
         )
         df_noise.to_csv(Path(path, 'Stabl artificial scores.csv'))
         df_max_probs_noise = pd.DataFrame(
-            data={"Max Proba": stabl.stability_scores_artificial_.max(axis=1)},
+            data={"Max Proba": stabl.stabl_scores_artificial_.max(axis=1)},
             index=synthetic_index
         )
         df_max_probs_noise = df_max_probs_noise.sort_values(by='Max Proba', ascending=False)
@@ -183,7 +183,7 @@ def plot_fdr_graph(
     figure, axis
     """
 
-    check_is_fitted(stabl, 'stability_scores_')
+    check_is_fitted(stabl, 'stabl_scores_')
 
     fig, ax = plt.subplots(1, 1, figsize=figsize)
 
@@ -194,11 +194,11 @@ def plot_fdr_graph(
 
     if stabl.min_fdr_ > 0.5:
         optimal_threshold = 1.
-        label = "No optimal threshold"
+        label = "No optimal hard_threshold"
 
     else:
         optimal_threshold = thresh_grid[np.argmin(stabl.FDRs_)]
-        label = f"Optimal threshold={optimal_threshold:.2f}"
+        label = f"Optimal hard_threshold={optimal_threshold:.2f}"
 
     ax.axvline(optimal_threshold, ls='--', lw=1.5, color="#C41E3A", label=label)
     ax.set_xlabel('Threshold')
@@ -236,7 +236,7 @@ def plot_stabl_path(
 
     new_threshold: float or None, default=None
         Threshold defining the minimum cutoff value for the
-        stability scores. This is a hard threshold: FDR control
+        stability scores. This is a hard hard_threshold: FDR control
         will be ignored if this is not None.
 
     show_fig : bool, default=True
@@ -256,9 +256,9 @@ def plot_stabl_path(
     figure, axis
     """
 
-    check_is_fitted(stabl, 'stability_scores_')
+    check_is_fitted(stabl, 'stabl_scores_')
 
-    threshold = stabl.threshold if new_threshold is None else new_threshold
+    threshold = stabl.hard_threshold if new_threshold is None else new_threshold
 
     if isinstance(threshold, float) and not (0.0 < threshold <= 1):
         raise ValueError(f'If new_threshold is set, it must be a float in (0, 1], got {threshold}')
@@ -277,7 +277,7 @@ def plot_stabl_path(
     if not paths_to_highlight.all():
         ax.plot(
             x_grid,
-            stabl.stability_scores_[~paths_to_highlight].T,
+            stabl.stabl_scores_[~paths_to_highlight].T,
             alpha=1,
             lw=1.5,
             color="#4D4F53",
@@ -287,7 +287,7 @@ def plot_stabl_path(
     if paths_to_highlight.any():
         ax.plot(
             x_grid,
-            stabl.stability_scores_[paths_to_highlight].T,
+            stabl.stabl_scores_[paths_to_highlight].T,
             alpha=1,
             lw=2,
             color="#C41E3A",
@@ -300,13 +300,13 @@ def plot_stabl_path(
             threshold * np.ones_like(stabl.lambda_grid),
             c="black",
             ls="--",
-            label="Hard threshold"
+            label="Hard hard_threshold"
         )
 
     if stabl.artificial_type is not None:
         ax.plot(
             x_grid,
-            stabl.stability_scores_artificial_.T,
+            stabl.stabl_scores_artificial_.T,
             color="gray",
             ls=":",
             alpha=.4,
@@ -320,7 +320,7 @@ def plot_stabl_path(
             stabl.fdr_min_threshold_ * np.ones_like(stabl.lambda_grid),
             c="black",
             ls="--",
-            label=f"FDRc threshold={stabl.fdr_min_threshold_: .2f}"
+            label=f"FDRc hard_threshold={stabl.fdr_min_threshold_: .2f}"
         )
 
     ax.tick_params(left=True, right=False, labelleft=True, labelbottom=False, bottom=False)
@@ -379,7 +379,7 @@ def save_stabl_results(
 
     new_threshold: float or None, default=None
         Threshold defining the minimum cutoff value for the
-        stability scores. This is a hard threshold: FDR control
+        stability scores. This is a hard hard_threshold: FDR control
         will be ignored if this is not None
 
     task_type: str, default="binary"
@@ -482,13 +482,13 @@ def fit_bootstrapped_sample(
         Value of the penalization parameter
 
     threshold: string, float, optional default None
-        The threshold value to use for feature selection. Features whose
+        The hard_threshold value to use for feature selection. Features whose
         importance is greater or equal are kept while the others are
-        discarded. If "median" (resp. "mean"), then the ``threshold`` value is
+        discarded. If "median" (resp. "mean"), then the ``hard_threshold`` value is
         the median (resp. the mean) of the feature importance. A scaling
         factor (e.g., "1.25*mean") may also be used. If None and if the
         estimator has a parameter penalty set to l1, either explicitly
-        or implicitly (e.g, Lasso), the threshold used is 1e-5.
+        or implicitly (e.g, Lasso), the hard_threshold used is 1e-5.
         Otherwise, "mean" is used by default.
 
     Returns
@@ -513,7 +513,7 @@ class Stabl(SelectorMixin, BaseEstimator):
     the regularization parameter for `base_estimator`. Features that
     get selected significantly by the model in these bootstrap samples are
     considered to be stable variables. This implementation also allows the user 
-    to use synthetic features to automatically set the threshold of selection by 
+    to use synthetic features to automatically set the hard_threshold of selection by
     FDR control.
     
     Parameters
@@ -535,7 +535,7 @@ class Stabl(SelectorMixin, BaseEstimator):
 
     artificial_type: str or None
         If str can either be "random_permutation" or "knockoff"
-        If None, we do not inject artificial features, the user must therefore define an arbitrary threshold.
+        If None, we do not inject artificial features, the user must therefore define an arbitrary hard_threshold.
         When the artificial_type is none, we fall back into the classic stability selection process.
 
     artificial_proportion: float
@@ -545,23 +545,23 @@ class Stabl(SelectorMixin, BaseEstimator):
         The fraction of samples to be used in each bootstrap sample.
         Can be greater than 1 if we replace in the boostrap technique.
 
-    threshold : float, default=None
+    hard_threshold : float, default=None
         Threshold defining the cutoff value for the stability selection.
-        If the threshold is defined, the FDRc will be bypassed.
+        If the hard_threshold is defined, the FDRc will be bypassed.
         The default value is None: the user must set a value if no random permutation/knockoff is used.
 
     fdr_threshold_range: array-like, default=np.arange(0.3, 1, 0.01)
-        When using random permutation or knockoff features, the user can change the tested values for the threshold
+        When using random permutation or knockoff features, the user can change the tested values for the hard_threshold
         For each value, the FDRc will be computed.
 
     bootstrap_threshold : string or float, default=None
-        The threshold value to use for feature selection. Features whose
+        The hard_threshold value to use for feature selection. Features whose
         importance is greater or equal are kept while the others are
-        discarded. If "median" (resp. "mean"), then the ``threshold`` value is
+        discarded. If "median" (resp. "mean"), then the ``hard_threshold`` value is
         the median (resp. the mean) of the feature importance. A scaling
         factor (e.g., "1.25*mean") may also be used. If None and if the
         estimator has a parameter penalty set to l1, either explicitly
-        or implicitly (e.g, Lasso), the threshold used is 1e-5.
+        or implicitly (e.g, Lasso), the hard_threshold used is 1e-5.
         Otherwise, "mean" is used by default.
 
     verbose : int, default=0
@@ -581,11 +581,11 @@ class Stabl(SelectorMixin, BaseEstimator):
     feature_names_in_ : ndarray of shape (n_features_in_,)
         Names of features seen during fit. Defined only when X has feature names that are all strings.
 
-    stability_scores_ : array, shape(n_features, n_alphas)
+    stabl_scores_ : array, shape(n_features, n_alphas)
         Array of stability scores for each feature and for each value of the
         penalization parameter.
 
-    stability_scores_artificial_ : array, shape(n_features, n_alphas)
+    stabl_scores_artificial_ : array, shape(n_features, n_alphas)
         Array of stability scores for each decoy/knockoff feature and for each value of the
         penalization parameter. Can only be accessed if we used decoy or knockoff in the 
         training.
@@ -593,14 +593,6 @@ class Stabl(SelectorMixin, BaseEstimator):
     X_artificial_ : array, shape(n_samples, n_features)
         Array of synthetic features. Can only be returned if we used decoy or knockoffs in the
         training.
-
-    coefs_ : array, shape(see parameter coef_process description)
-        Array of coefs_
-        Can only be retrieved if the parameter return_coefs is set to True
-
-    intercepts_ : array, (shape see parameter coef_process description)
-        Array of intercepts
-        Can only be retrieved if the parameter return_coefs is set to True
 
     FDRs_: array
         The array of False Discovery Rates.
@@ -611,8 +603,8 @@ class Stabl(SelectorMixin, BaseEstimator):
         Can only be retrieved if we used decoy or knockoffs in the training
 
     fdr_min_threshold_ : float
-        The threshold achieving the desired FDR. Can only be retrieved if we used decoy or knockoff
-        in the training and if no hard threshold where defined. 
+        The hard_threshold achieving the desired FDR. Can only be retrieved if we used decoy or knockoff
+        in the training and if no hard hard_threshold where defined.
     """
 
     def __init__(
@@ -621,7 +613,7 @@ class Stabl(SelectorMixin, BaseEstimator):
                 penalty='l1',
                 solver='liblinear',
                 class_weight='balanced',
-                max_iter=1e6
+                max_iter=int(1e6)
             ),
             lambda_name='C',
             lambda_grid=list(np.linspace(0.01, 1, 30)),
@@ -630,7 +622,7 @@ class Stabl(SelectorMixin, BaseEstimator):
             artificial_proportion=1.,
             sample_fraction=0.5,
             replace=False,
-            threshold=None,
+            hard_threshold=None,
             fdr_threshold_range=list(np.arange(0.3, 1., .01)),
             bootstrap_threshold=1e-5,
             verbose=0,
@@ -644,17 +636,15 @@ class Stabl(SelectorMixin, BaseEstimator):
         self.artificial_proportion = artificial_proportion
         self.n_bootstraps = n_bootstraps
         self.sample_fraction = sample_fraction
-        self.threshold = threshold
+        self.hard_threshold = hard_threshold
         self.fdr_threshold_range = fdr_threshold_range
         self.bootstrap_threshold = bootstrap_threshold
         self.verbose = verbose
         self.n_jobs = n_jobs
         self.random_state = random_state
         self.replace = replace
-        self.stability_scores_ = None
-        self.stability_scores_artificial_ = None
-        self.coefs_ = None
-        self.intercepts_ = None
+        self.stabl_scores_ = None
+        self.stabl_scores_artificial_ = None
         self.FDRs_ = None
         self.min_fdr_ = None
         self.fdr_min_threshold_ = None
@@ -670,13 +660,13 @@ class Stabl(SelectorMixin, BaseEstimator):
         if not isinstance(self.sample_fraction, float) or not (0.0 < self.sample_fraction):
             raise ValueError(f'sample_fraction should be a positive float, got {self.sample_fraction}')
 
-        if isinstance(self.threshold, float) and not (0.0 < self.threshold <= 1):
-            raise ValueError(f'If threshold is set, it must be a float in (0, 1], got {self.threshold}')
+        if isinstance(self.hard_threshold, float) and not (0.0 < self.hard_threshold <= 1):
+            raise ValueError(f'If hard_threshold is set, it must be a float in (0, 1], got {self.hard_threshold}')
 
-        if self.threshold is None and self.artificial_type is None:
+        if self.hard_threshold is None and self.artificial_type is None:
             raise ValueError(
                 f'When not using artificial features ("random_permutations" or "knockoff"), '
-                f'the user must define a threshold of selection, got threshold = {self.threshold}'
+                f'the user must define a hard_threshold of selection, got hard_threshold = {self.hard_threshold}'
             )
 
         if self.artificial_type is not None and not (0.0 < self.artificial_proportion <= 1.):
@@ -721,12 +711,12 @@ class Stabl(SelectorMixin, BaseEstimator):
         base_estimator = clone(self.base_estimator)  # Cloning the base estimator
 
         # Initializing the stability scores
-        self.stability_scores_ = np.zeros((n_features, n_lambdas))
+        self.stabl_scores_ = np.zeros((n_features, n_lambdas))
 
         # Artificial scores and features
         if self.artificial_type is not None:
             # Only initialize those score if we use synthetic features 
-            self.stability_scores_artificial_ = np.zeros((n_injected_noise, n_lambdas))
+            self.stabl_scores_artificial_ = np.zeros((n_injected_noise, n_lambdas))
             X = self._make_artificial_features(
                 X=X,
                 nb_noise=n_injected_noise,
@@ -770,14 +760,14 @@ class Stabl(SelectorMixin, BaseEstimator):
               )
 
             if self.artificial_type is not None:
-                self.stability_scores_artificial_[:, idx] = np.vstack(selected_variables)[:, n_features:].mean(axis=0)
+                self.stabl_scores_artificial_[:, idx] = np.vstack(selected_variables)[:, n_features:].mean(axis=0)
 
-            self.stability_scores_[:, idx] = np.vstack(selected_variables)[:, :n_features].mean(axis=0)
+            self.stabl_scores_[:, idx] = np.vstack(selected_variables)[:, :n_features].mean(axis=0)
 
-        max_scores = np.max(self.stability_scores_, axis=1)
+        max_scores = np.max(self.stabl_scores_, axis=1)
 
         if self.artificial_type is not None:
-            max_scores_artificial = np.max(self.stability_scores_artificial_, axis=1)
+            max_scores_artificial = np.max(self.stabl_scores_artificial_, axis=1)
 
             self._compute_FDRc(
                 artificial_proportion=self.artificial_proportion,
@@ -799,7 +789,7 @@ class Stabl(SelectorMixin, BaseEstimator):
 
         new_threshold: float or None, default=None
             Threshold defining the minimum cutoff value for the
-            stability scores. This is a hard threshold: FDR control
+            stability scores. This is a hard hard_threshold: FDR control
             will be ignored if this is not None
 
         Returns
@@ -822,7 +812,7 @@ class Stabl(SelectorMixin, BaseEstimator):
         ----------
         new_threshold: float or None, default=None
             Threshold defining the minimum cutoff value for the
-            stability scores. This is a hard threshold: FDR control
+            stability scores. This is a hard hard_threshold: FDR control
             will be ignored if this is not None
 
         input_features : array-like of str or None, default=None
@@ -852,7 +842,7 @@ class Stabl(SelectorMixin, BaseEstimator):
 
         new_threshold: float or None, default=None
             Threshold defining the minimum cutoff value for the
-            stability scores. This is a hard threshold: FDR control
+            stability scores. This is a hard hard_threshold: FDR control
             will be ignored if this is not None.
 
         Returns
@@ -886,7 +876,7 @@ class Stabl(SelectorMixin, BaseEstimator):
         ----------
         new_threshold: float or None, default=None
             Threshold defining the minimum cutoff value for the
-            stability scores. This is a hard threshold: FDR control
+            stability scores. This is a hard hard_threshold: FDR control
             will be ignored if this is not None
             
         Returns
@@ -897,16 +887,16 @@ class Stabl(SelectorMixin, BaseEstimator):
             [# input features], in which an element is True iff its
             corresponding feature is selected for retention. 
         """
-        check_is_fitted(self, 'stability_scores_')
+        check_is_fitted(self, 'stabl_scores_')
 
-        new_threshold = self.threshold if new_threshold is None else new_threshold
+        new_threshold = self.hard_threshold if new_threshold is None else new_threshold
 
         if new_threshold is None:
             final_cutoff = self.fdr_min_threshold_
         else:
             final_cutoff = new_threshold
 
-        max_scores = np.max(self.stability_scores_, axis=1)
+        max_scores = np.max(self.stabl_scores_, axis=1)
         mask = max_scores > final_cutoff
         return mask
 
@@ -957,7 +947,7 @@ class Stabl(SelectorMixin, BaseEstimator):
 
     def _compute_FDRc(self, thresholds_grid, max_scores, max_scores_artificial, artificial_proportion):
         """Function that computes the FDRc at each value of the `thresholds_grid`.
-        Also compute the threshold minimizing the FDRc.
+        Also compute the hard_threshold minimizing the FDRc.
 
         Parameters
         ----------
@@ -979,8 +969,8 @@ class Stabl(SelectorMixin, BaseEstimator):
         """
         FDPs = []  # Initializing false discovery proportions
         artificial_proportion = self.artificial_proportion
-        max_scores_artificial = np.max(self.stability_scores_artificial_, axis=1)
-        max_scores = np.max(self.stability_scores_, axis=1)
+        max_scores_artificial = np.max(self.stabl_scores_artificial_, axis=1)
+        max_scores = np.max(self.stabl_scores_, axis=1)
 
         for thresh in self.fdr_threshold_range:
             num = np.sum((1 / artificial_proportion) * (max_scores_artificial > thresh)) + 1

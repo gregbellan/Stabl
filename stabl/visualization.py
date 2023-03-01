@@ -123,7 +123,7 @@ def scatterplot_features(
         fmt='pdf',
         **kwargs
 ):
-    """Plot the scatter plot of the most stable features given a threshold 
+    """Plot the scatter plot of the most stable features given a hard_threshold
     We can also export them to pdf 
 
     Parameters

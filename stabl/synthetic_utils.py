@@ -536,7 +536,7 @@ def synthetic_benchmark_regression(
                                      lambda_grid=LAMBDA_GRID_,
                                      artificial_type=None,
                                      sample_fraction=.5,
-                                     threshold=.1,
+                                     hard_threshold=.1,
                                      replace=False,
                                      verbose=0,
                                      n_jobs=-1,
