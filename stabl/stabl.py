@@ -62,7 +62,7 @@ def bootstrap(y, n_subsamples, replace, rng=np.random.default_rng(None)):
 
 
 def _bootstraps_generator(n_bootstraps, y, n_subsamples, replace, random_state=None):
-    """Function that creates the bootstrapped indices used in the STABL process.
+    """Function that creates the bootstrapped indices used in the Stabl process.
     The function returns a generator containing the indices for each bootstrap.
     
     Parameters
@@ -108,7 +108,7 @@ def export_stabl_to_csv(stabl, path):
 
     Parameters
     ----------
-    stabl: STABL
+    stabl: Stabl
         Fitted STABL instance.
 
     path: str or Path
@@ -124,14 +124,14 @@ def export_stabl_to_csv(stabl, path):
     columns = [f"{stabl.lambda_name}'='{col: .3f}" for col in stabl.lambda_grid]
 
     df_real = pd.DataFrame(data=stabl.stability_scores_, index=X_columns, columns=columns)
-    df_real.to_csv(Path(path, 'STABL scores.csv'))
+    df_real.to_csv(Path(path, 'Stabl scores.csv'))
 
     df_max_probs = pd.DataFrame(
         data={"Max Proba": stabl.stability_scores_.max(axis=1)},
         index=X_columns
     )
     df_max_probs = df_max_probs.sort_values(by='Max Proba', ascending=False)
-    df_max_probs.to_csv(Path(path, 'Max STABL scores.csv'))
+    df_max_probs.to_csv(Path(path, 'Max Stabl scores.csv'))
 
     if stabl.artificial_type is not None:
         synthetic_index = [f'col_synthetic_{i + 1}' for i in range(stabl.X_artificial_.shape[1])]
@@ -141,13 +141,13 @@ def export_stabl_to_csv(stabl, path):
             index=synthetic_index,
             columns=columns
         )
-        df_noise.to_csv(Path(path, 'STABL artificial scores.csv'))
+        df_noise.to_csv(Path(path, 'Stabl artificial scores.csv'))
         df_max_probs_noise = pd.DataFrame(
             data={"Max Proba": stabl.stability_scores_artificial_.max(axis=1)},
             index=synthetic_index
         )
         df_max_probs_noise = df_max_probs_noise.sort_values(by='Max Proba', ascending=False)
-        df_max_probs_noise.to_csv(Path(path, 'Max STABL artificial scores.csv'))
+        df_max_probs_noise.to_csv(Path(path, 'Max Stabl artificial scores.csv'))
 
 
 def plot_fdr_graph(
@@ -163,7 +163,7 @@ def plot_fdr_graph(
 
     Parameters
     ----------
-    stabl : STABL
+    stabl : Stabl
         Fitted STABL instance
 
     show_fig : bool, default=True
@@ -223,7 +223,7 @@ def plot_stabl_path(
         new_threshold=None,
         show_fig=True,
         export_file=False,
-        path='./STABL path.pdf',
+        path='./Stabl path.pdf',
         figsize=(4, 8)
 ):
     """Plots stability path.
@@ -231,7 +231,7 @@ def plot_stabl_path(
 
     Parameters
     ----------
-    stabl : STABL
+    stabl : Stabl
         Fitted STABL instance.
 
     new_threshold: float or None, default=None
@@ -362,7 +362,7 @@ def save_stabl_results(
 
     Parameters
     ----------
-    stabl: STABL
+    stabl: Stabl
         Must be a fitted STABL object.
 
     path: str or Path
@@ -507,8 +507,8 @@ def fit_bootstrapped_sample(
     return features_selection.get_support()
 
 
-class STABL(SelectorMixin, BaseEstimator):
-    """In a STABL process, the estimator `base_estimator` is fitted
+class Stabl(SelectorMixin, BaseEstimator):
+    """In a Stabl process, the estimator `base_estimator` is fitted
     several time on bootstrap samples of the original data set, for different values of
     the regularization parameter for `base_estimator`. Features that
     get selected significantly by the model in these bootstrap samples are
@@ -691,7 +691,7 @@ class STABL(SelectorMixin, BaseEstimator):
                              'does not have a parameter with that name')
 
     def fit(self, X, y):
-        """Fit the STABL model on the given data.
+        """Fit the Stabl model on the given data.
 
         Parameters
         ----------
@@ -738,7 +738,7 @@ class STABL(SelectorMixin, BaseEstimator):
         leave = (self.verbose > 0)
         for idx, lambda_value in tqdm(
                 enumerate(self.lambda_grid),
-                'STABL progress',
+                'Stabl progress',
                 total=n_lambdas,
                 colour='#001A7B',
                 leave=leave
@@ -965,10 +965,10 @@ class STABL(SelectorMixin, BaseEstimator):
             The thresholds used observed to compute the FDR
 
         max_scores: array-like
-            The max STABL scores associated to each original feature
+            The max Stabl scores associated to each original feature
 
         max_scores_artificial: array-like
-            The max STABL scores associated to each artificial feature
+            The max Stabl scores associated to each artificial feature
 
         artificial_proportion: float
             The proportion of artificial features compared to the original ones
