@@ -1,38 +1,49 @@
-from warnings import warn
 import os
+from pathlib import Path
+from warnings import warn
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pathlib import Path
-
 from joblib import Parallel, delayed
 from knockpy.knockoffs import GaussianSampler
 from sklearn.base import BaseEstimator, clone
 from sklearn.feature_selection import SelectorMixin, SelectFromModel
 from sklearn.linear_model import LogisticRegression
 from sklearn.utils import safe_mask
-from sklearn.utils.validation import check_is_fitted, _check_feature_names_in
+from sklearn.utils.class_weight import compute_sample_weight
+from sklearn.utils.validation import _check_feature_names_in, check_is_fitted
 from tqdm import tqdm
 
-from .visualization import boxplot_features, scatterplot_features
+from visualization import boxplot_features, scatterplot_features
 
 
-def bootstrap(y, n_subsamples, replace, rng=np.random.default_rng(None)):
+def classic_bootstrap(y, n_subsamples, replace=True, class_weight=None, rng=np.random.default_rng(None)):
     """Function to create a bootstrap sample from the original dataset.
+    Weights can be used to make some samples more likely to be selected.
 
     Parameters
     ----------
-    y : array-like, shape(n_samples, )
+    y : array-like, shape(n_repeats, )
         The outcome array for classification or regression
 
     n_subsamples : int
-        The number of subsamples indices returned by the bootstrap 
+        The number of subsamples indices returned by the bootstrap
 
-    replace : bool
+    replace : bool, default=True
         Whether to replace samples when bootstrapping
 
-    rng: np.random.default_rng
+    class_weight: str or dict or None, default=None
+        This is the sampling weights used in the bootstrap process
+            - If None, no weights are used.
+            - If 'balanced', the weights are automatically computed so that
+            the weights are balanced and the probabilities of sampling different
+            classes are adjusted.
+            - Can also be a dictionary of this format {class1:value1, class2:value2}
+            values are weights not probabilities. They will automatically be converted
+            into probabilities.
+
+    rng: np.random.default_rng, default=np.random.default_rng(None)
         RandomState generator
 
     Returns
@@ -45,55 +56,88 @@ def bootstrap(y, n_subsamples, replace, rng=np.random.default_rng(None)):
 
     if n_subsamples > n_samples and replace is False:
         raise ValueError("When `replace` is set to False, n_subsamples cannot be greater than the "
-                         f"number of samples in the original dataset. Got `n_samples`={n_samples} "
+                         f"number of samples in the original dataset. Got `n_repeats`={n_samples} "
                          f"and `n_subsamples`={n_subsamples}")
+
+    if class_weight is not None:
+        samples_weight = compute_sample_weight(class_weight, y)
+        sampling_probs = samples_weight / samples_weight.sum()
+
+    else:
+        sampling_probs = None
 
     sampled_indices = rng.choice(
         a=n_samples,
         size=n_subsamples,
-        replace=replace
+        replace=replace,
+        p=sampling_probs
     )
 
     # Handling the case of binary classification where we only select one class
     if len(np.unique(y[sampled_indices])) < 2:
-        sampled_indices = bootstrap(y, n_subsamples, replace=replace, rng=rng)
+        sampled_indices = classic_bootstrap(
+            y,
+            n_subsamples,
+            replace=replace,
+            class_weight=class_weight,
+            rng=rng
+        )
 
     return sampled_indices
 
 
-def _bootstraps_generator(n_bootstraps, y, n_subsamples, replace, random_state=None):
-    """Function that creates the bootstrapped indices used in the Stabl process.
+def _bootstrap_generator(
+        n_bootstraps,
+        bootstrap_func,
+        y,
+        n_subsamples,
+        replace,
+        class_weight,
+        random_state=None,
+        **kwargs
+):
+    """Function that creates bootstrapped indices, used in the Stabl process.
     The function returns a generator containing the indices for each bootstrap.
-    
+
     Parameters
     ----------
-    n_bootstraps : int
-        Number of bootstraps for each value of the lambda parameter
+    n_bootstraps: int
+        Number of bootstraps for each value of the lambda parameter.
 
-    y : array-like, size(n_samples, )
+    bootstrap_func: python function
+        The function use to draw the indices.
+        Should have at least the following parameters:
+            - y: target array
+            - n_subsamples: number of samples to draw from the original data set
+            - replace: boolean indicating if we want to replace the samples
+
+    y: array-like, size(n_repeats, )
         Targets
-    
-    n_subsamples : int
+
+    n_subsamples: int
         number of samples to draw from the original data set
 
-    replace : bool
-        If set to True, the bootstrap will be done such that the samples are 
+    replace: bool
+        If set to True, the bootstrap will be done such that the samples are
         replaced during the process.
 
-    Returns
-    -------
-    bootstraps_generator: generator
-        The generator containing all the bootstrapped indices.
+    random_state: int,
+        Random state for reproducibility.
+
+    **kwargs: arguments
+        Further arguments we want to pass to bootstrap_func.
     """
     rng = np.random.default_rng(random_state)
-
     for _ in range(n_bootstraps):
+
         # Generating the bootstrapped indices
-        subsample = bootstrap(
+        subsample = bootstrap_func(
             y=y,
             n_subsamples=n_subsamples,
             replace=replace,
-            rng=rng
+            class_weight=class_weight,
+            rng=rng,
+            **kwargs
         )
 
         if isinstance(subsample, tuple):
@@ -104,50 +148,57 @@ def _bootstraps_generator(n_bootstraps, y, n_subsamples, replace, random_state=N
 
 
 def export_stabl_to_csv(stabl, path):
-    """Exports STABL scores to csv. They can later be used to plot the stability path again.
+    """
+    Export Stabl scores to csv. They can later be used to plot the stabl path again.
 
     Parameters
     ----------
     stabl: Stabl
-        Fitted STABL instance.
+        Fitted Stabl instance.
 
     path: str or Path
         The path where csv files will be saved
+
+    Returns
+    -------
+    None
     """
+
     check_is_fitted(stabl, 'stabl_scores_')
 
     if hasattr(stabl, 'feature_names_in_'):
         X_columns = stabl.feature_names_in_
     else:
-        X_columns = [f'x.{i}' for i in range(stabl.n_features_in_)]
+        X_columns = [f'x.{i + 1}' for i in range(stabl.n_features_in_)]
 
     columns = [f"{stabl.lambda_name}'='{col: .3f}" for col in stabl.lambda_grid]
 
     df_real = pd.DataFrame(data=stabl.stabl_scores_, index=X_columns, columns=columns)
-    df_real.to_csv(Path(path, 'Stabl scores.csv'))
+    df_real.to_csv(Path(path, 'STABL scores.csv'))
 
     df_max_probs = pd.DataFrame(
         data={"Max Proba": stabl.stabl_scores_.max(axis=1)},
         index=X_columns
     )
     df_max_probs = df_max_probs.sort_values(by='Max Proba', ascending=False)
-    df_max_probs.to_csv(Path(path, 'Max Stabl scores.csv'))
+    df_max_probs.to_csv(Path(path, 'Max STABL scores.csv'))
 
     if stabl.artificial_type is not None:
-        synthetic_index = [f'col_synthetic_{i + 1}' for i in range(stabl.X_artificial_.shape[1])]
+        synthetic_index = [f'artificial.{i + 1}' for i in range(stabl.X_artificial_.shape[1])]
 
         df_noise = pd.DataFrame(
             data=stabl.stabl_scores_artificial_,
             index=synthetic_index,
             columns=columns
         )
-        df_noise.to_csv(Path(path, 'Stabl artificial scores.csv'))
+        df_noise.to_csv(Path(path, 'STABL artificial scores.csv'))
+
         df_max_probs_noise = pd.DataFrame(
             data={"Max Proba": stabl.stabl_scores_artificial_.max(axis=1)},
             index=synthetic_index
         )
         df_max_probs_noise = df_max_probs_noise.sort_values(by='Max Proba', ascending=False)
-        df_max_probs_noise.to_csv(Path(path, 'Max Stabl artificial scores.csv'))
+        df_max_probs_noise.to_csv(Path(path, 'Max STABL artificial scores.csv'))
 
 
 def plot_fdr_graph(
@@ -159,24 +210,24 @@ def plot_fdr_graph(
 ):
     """
     Plots the FDR graph.
-    The user can also export it to pdf of other formats
+    The user can also export it to pdf of other format
 
     Parameters
     ----------
     stabl : Stabl
-        Fitted STABL instance
+        Fitted Stabl instance.
 
     show_fig : bool, default=True
         Whether to display the figure
 
-    export_file: bool
+    export_file: bool, default=False
         If set to True, it will export the plot using the path
 
     path: str or Path
         Should be the string of the path/name. Use name of the file plus extension
 
-    figsize : tuple
-        Size of the STABL path
+    figsize: tuple
+        Size of the Stabl fdr graph
 
     Returns
     -------
@@ -189,16 +240,14 @@ def plot_fdr_graph(
 
     thresh_grid = stabl.fdr_threshold_range
 
-    ax.plot(thresh_grid, stabl.FDRs_, color="#4D4F53",
-            label='FDR Estimate', lw=2)
+    ax.plot(thresh_grid, stabl.FDRs_, color="#4D4F53", label='FDR estimate', lw=2)
 
-    if stabl.min_fdr_ > 0.5:
+    if stabl.min_fdr_ > 1.:
         optimal_threshold = 1.
-        label = "No optimal hard_threshold"
-
+        label = "No optimal threshold minimizing the FDR estimate"
     else:
         optimal_threshold = thresh_grid[np.argmin(stabl.FDRs_)]
-        label = f"Optimal hard_threshold={optimal_threshold:.2f}"
+        label = f"Optimal threshold={optimal_threshold:.2f}"
 
     ax.axvline(optimal_threshold, ls='--', lw=1.5, color="#C41E3A", label=label)
     ax.set_xlabel('Threshold')
@@ -220,26 +269,26 @@ def plot_fdr_graph(
 
 def plot_stabl_path(
         stabl,
-        new_threshold=None,
+        new_hard_threshold=None,
         show_fig=True,
         export_file=False,
         path='./Stabl path.pdf',
         figsize=(4, 8)
 ):
-    """Plots stability path.
-    The user can also export it to pdf of other formats
+    """Plots Stabl path.
+    The user can also export it to pdf or any other format
 
     Parameters
     ----------
-    stabl : Stabl
-        Fitted STABL instance.
+    stabl: Stabl
+        Fitted Stabl instance.
 
-    new_threshold: float or None, default=None
+    new_hard_threshold: float or None, default=None
         Threshold defining the minimum cutoff value for the
-        stability scores. This is a hard hard_threshold: FDR control
+        stabl scores. This is a hard threshold: FDR control
         will be ignored if this is not None.
 
-    show_fig : bool, default=True
+    show_fig: bool, default=True
         Whether to display the figure
 
     export_file: bool
@@ -248,7 +297,7 @@ def plot_stabl_path(
     path: str or Path
         Should be the string of the path/name. Use name of the file plus extension
 
-    figsize : tuple
+    figsize: tuple
         Size of the STABL path
 
     Returns
@@ -258,12 +307,12 @@ def plot_stabl_path(
 
     check_is_fitted(stabl, 'stabl_scores_')
 
-    threshold = stabl.hard_threshold if new_threshold is None else new_threshold
+    threshold = stabl.hard_threshold if new_hard_threshold is None else new_hard_threshold
 
     if isinstance(threshold, float) and not (0.0 < threshold <= 1):
-        raise ValueError(f'If new_threshold is set, it must be a float in (0, 1], got {threshold}')
+        raise ValueError(f'If new_hard_threshold is set, it must be a float in (0, 1], got {threshold}')
 
-    paths_to_highlight = stabl.get_support(new_threshold=threshold)
+    paths_to_highlight = stabl.get_support(new_hard_threshold=threshold)
 
     x_grid = None
     if stabl.lambda_name == 'alpha':
@@ -300,7 +349,7 @@ def plot_stabl_path(
             threshold * np.ones_like(stabl.lambda_grid),
             c="black",
             ls="--",
-            label="Hard hard_threshold"
+            label="Hard threshold"
         )
 
     if stabl.artificial_type is not None:
@@ -320,7 +369,7 @@ def plot_stabl_path(
             stabl.fdr_min_threshold_ * np.ones_like(stabl.lambda_grid),
             c="black",
             ls="--",
-            label=f"FDRc hard_threshold={stabl.fdr_min_threshold_: .2f}"
+            label=f"FDRc threshold={stabl.fdr_min_threshold_: .2f}"
         )
 
     ax.tick_params(left=True, right=False, labelleft=True, labelbottom=False, bottom=False)
@@ -352,40 +401,39 @@ def save_stabl_results(
         df_X,
         y,
         figure_fmt='pdf',
-        new_threshold=None,
+        new_hard_threshold=None,
         task_type="binary"
 ):
     """
-    Function to automatically save all the results of a STABL process.
+    Function to automatically save all the results of a Stabl fitted instance.
     The user must define the input DataFrame and the output to plot the stable
     features.
 
     Parameters
     ----------
     stabl: Stabl
-        Must be a fitted STABL object.
+        Must be a fitted Stabl object.
 
-    path: str or Path
+    path: Path or str
         The path where to save the results. If the path already exists an error will be raised
 
     figure_fmt: str
         Format of the figures.
 
-    df_X: pd.DataFrame, shape=(n_samples, n_features)
+    df_X: pd.DataFrame, shape=(n_repeats, n_features)
         input DataFrame
 
-    y: pd.Series, shape=(n_samples)
+    y: pd.Series, shape=(n_repeats)
         Series of output
 
-    new_threshold: float or None, default=None
+    new_hard_threshold: float or None, default=None
         Threshold defining the minimum cutoff value for the
-        stability scores. This is a hard hard_threshold: FDR control
+        stability scores. This is a hard threshold: FDR control
         will be ignored if this is not None
 
     task_type: str, default="binary"
         Type of performed task.
         Choose "binary" for binary classification and "regression" for regression tasks.
-
     """
 
     check_is_fitted(stabl)
@@ -402,22 +450,23 @@ def save_stabl_results(
 
     plot_stabl_path(
         stabl=stabl,
-        new_threshold=new_threshold,
+        new_hard_threshold=new_hard_threshold,
         show_fig=False,
         export_file=True,
         path=Path(path, f'Stability Path.{figure_fmt}'),
         figsize=(4, 8)
     )
 
-    plot_fdr_graph(
-        stabl=stabl,
-        show_fig=False,
-        export_file=True,
-        path=Path(path, f'FDR Graph.{figure_fmt}'),
-        figsize=(8, 4)
-    )
+    if stabl.artificial_type is not None:
+        plot_fdr_graph(
+            stabl=stabl,
+            show_fig=False,
+            export_file=True,
+            path=Path(path, f'FDR Graph.{figure_fmt}'),
+            figsize=(8, 4)
+        )
 
-    selected_features = stabl.get_feature_names_out(new_threshold=new_threshold)
+    selected_features = stabl.get_feature_names_out(new_hard_threshold=new_hard_threshold)
 
     nb_selected_features = len(selected_features)
     df_selected_features = pd.DataFrame(
@@ -426,7 +475,6 @@ def save_stabl_results(
     )
 
     os.makedirs(Path(path, 'Selected Features'))
-
     df_selected_features.to_csv(Path(path, "Selected Features", "Selected features.csv"))
 
     if task_type == "binary":
@@ -440,7 +488,7 @@ def save_stabl_results(
             fmt=figure_fmt
         )
 
-    else:
+    elif task_type == "regression":
         scatterplot_features(
             list_of_features=selected_features,
             df_X=df_X,
@@ -469,10 +517,10 @@ def fit_bootstrapped_sample(
     base_estimator: estimator
         This is the estimator to be fitted on the data
 
-    X: {array-like, sparse matrix}, shape = [n_samples, n_features]
+    X: {array-like, sparse matrix}, shape = [n_repeats, n_features]
         The training input samples.
 
-    y: array-like, shape = [n_samples]
+    y: array-like, shape = [n_repeats]
         The target values.
 
     lambda_name: str
@@ -481,7 +529,7 @@ def fit_bootstrapped_sample(
     lambda_value: float
         Value of the penalization parameter
 
-    threshold: string, float, optional default None
+    threshold: string or float, default=None
         The hard_threshold value to use for feature selection. Features whose
         importance is greater or equal are kept while the others are
         discarded. If "median" (resp. "mean"), then the ``hard_threshold`` value is
@@ -493,11 +541,12 @@ def fit_bootstrapped_sample(
 
     Returns
     -------
-    selected_variables: array-like, shape = [n_features]
-        Boolean mask of selected variables.
+    selected_variables: array-like, shape=(n_features, )
+        Boolean mask of the selected variables.
     """
     base_estimator.set_params(**{lambda_name: lambda_value})
     base_estimator.fit(X, y)
+
     features_selection = SelectFromModel(
         estimator=base_estimator,
         threshold=threshold,
@@ -508,29 +557,29 @@ def fit_bootstrapped_sample(
 
 
 class Stabl(SelectorMixin, BaseEstimator):
-    """In a Stabl process, the estimator `base_estimator` is fitted
+    """In a STABL process, the estimator `base_estimator` is fitted
     several time on bootstrap samples of the original data set, for different values of
     the regularization parameter for `base_estimator`. Features that
     get selected significantly by the model in these bootstrap samples are
-    considered to be stable variables. This implementation also allows the user 
+    considered to be stable variables. This implementation also allows the user
     to use synthetic features to automatically set the hard_threshold of selection by
     FDR control.
-    
+
     Parameters
     ----------
-    base_estimator : sklearn.base_estimator, default=LogisticRegression
+    base_estimator: sklearn.base_estimator, default=LogisticRegression
         The base estimator used for stability selection. The estimator
         must have either a ``feature_importances_`` or ``coef_``
         attribute after fitting.
 
-    lambda_name : str, default='C'
+    lambda_name: str, default='C'
         The name of the penalization parameter for the estimator
         `base_estimator`. Example for LogisticRegression in scikit-learn: 'C'
 
-    lambda_grid : array-like, default=np.linspace(0.01, 1, 30)
+    lambda_grid: array-like, default=np.linspace(0.01, 1, 30)
         Grid of values for the penalization parameter to iterate over.
 
-    n_bootstraps : int, default=1000
+    n_bootstraps: int, default=1000
         Number of bootstrap iterations for each value of lambda.
 
     artificial_type: str or None
@@ -541,11 +590,11 @@ class Stabl(SelectorMixin, BaseEstimator):
     artificial_proportion: float
         The proportion of artificial features to
 
-    sample_fraction : float, default=0.5
+    sample_fraction: float, default=0.5
         The fraction of samples to be used in each bootstrap sample.
         Can be greater than 1 if we replace in the boostrap technique.
 
-    hard_threshold : float, default=None
+    hard_threshold: float, default=None
         Threshold defining the cutoff value for the stability selection.
         If the hard_threshold is defined, the FDRc will be bypassed.
         The default value is None: the user must set a value if no random permutation/knockoff is used.
@@ -554,7 +603,7 @@ class Stabl(SelectorMixin, BaseEstimator):
         When using random permutation or knockoff features, the user can change the tested values for the hard_threshold
         For each value, the FDRc will be computed.
 
-    bootstrap_threshold : string or float, default=None
+    bootstrap_threshold: string or float, default=None
         The hard_threshold value to use for feature selection. Features whose
         importance is greater or equal are kept while the others are
         discarded. If "median" (resp. "mean"), then the ``hard_threshold`` value is
@@ -564,10 +613,10 @@ class Stabl(SelectorMixin, BaseEstimator):
         or implicitly (e.g, Lasso), the hard_threshold used is 1e-5.
         Otherwise, "mean" is used by default.
 
-    verbose : int, default=0
+    verbose: int, default=0
         Controls the verbosity: the higher, the more messages.
 
-    n_jobs : int, default=-1
+    n_jobs: int, default=-1
         Number of jobs to run in parallel.
 
     random_state: int or None, default=None
@@ -575,22 +624,22 @@ class Stabl(SelectorMixin, BaseEstimator):
 
     Attributes
     ----------
-    n_features_in_ : int
+    n_features_in_: int
         Number of features seen during fit.
 
-    feature_names_in_ : ndarray of shape (n_features_in_,)
+    feature_names_in_: ndarray of shape (n_features_in_,)
         Names of features seen during fit. Defined only when X has feature names that are all strings.
 
-    stabl_scores_ : array, shape(n_features, n_alphas)
+    stabl_scores_: array, shape(n_features, n_alphas)
         Array of stability scores for each feature and for each value of the
         penalization parameter.
 
-    stabl_scores_artificial_ : array, shape(n_features, n_alphas)
+    stabl_scores_artificial_: array, shape(n_features, n_alphas)
         Array of stability scores for each decoy/knockoff feature and for each value of the
-        penalization parameter. Can only be accessed if we used decoy or knockoff in the 
+        penalization parameter. Can only be accessed if we used decoy or knockoff in the
         training.
 
-    X_artificial_ : array, shape(n_samples, n_features)
+    X_artificial_: array, shape(n_repeats, n_features)
         Array of synthetic features. Can only be returned if we used decoy or knockoffs in the
         training.
 
@@ -598,11 +647,11 @@ class Stabl(SelectorMixin, BaseEstimator):
         The array of False Discovery Rates.
         Can only be retrieved if we used decoy or knockoffs in the training
 
-    min_fdr_ : float
+    min_fdr_: float
         The Smallest FDR achieved
         Can only be retrieved if we used decoy or knockoffs in the training
 
-    fdr_min_threshold_ : float
+    fdr_min_threshold_: float
         The hard_threshold achieving the desired FDR. Can only be retrieved if we used decoy or knockoff
         in the training and if no hard hard_threshold where defined.
     """
@@ -613,7 +662,7 @@ class Stabl(SelectorMixin, BaseEstimator):
                 penalty='l1',
                 solver='liblinear',
                 class_weight='balanced',
-                max_iter=int(1e6)
+                max_iter=1_000_000
             ),
             lambda_name='C',
             lambda_grid=list(np.linspace(0.01, 1, 30)),
@@ -623,26 +672,30 @@ class Stabl(SelectorMixin, BaseEstimator):
             sample_fraction=0.5,
             replace=False,
             hard_threshold=None,
-            fdr_threshold_range=list(np.arange(0.3, 1., .01)),
+            fdr_threshold_range=list(np.arange(0., 1., .01)),
+            bootstrap_func=classic_bootstrap,
+            sample_weight_bootstrap=None,
             bootstrap_threshold=1e-5,
             verbose=0,
             n_jobs=-1,
             random_state=None
     ):
-        self.lambda_name = lambda_name
         self.base_estimator = base_estimator
+        self.lambda_name = lambda_name
         self.lambda_grid = lambda_grid
+        self.n_bootstraps = n_bootstraps
         self.artificial_type = artificial_type
         self.artificial_proportion = artificial_proportion
-        self.n_bootstraps = n_bootstraps
         self.sample_fraction = sample_fraction
         self.hard_threshold = hard_threshold
         self.fdr_threshold_range = fdr_threshold_range
+        self.bootstrap_func = bootstrap_func
+        self.sample_weight_bootstrap = sample_weight_bootstrap
         self.bootstrap_threshold = bootstrap_threshold
         self.verbose = verbose
         self.n_jobs = n_jobs
-        self.random_state = random_state
         self.replace = replace
+        self.random_state = random_state
         self.stabl_scores_ = None
         self.stabl_scores_artificial_ = None
         self.FDRs_ = None
@@ -650,48 +703,42 @@ class Stabl(SelectorMixin, BaseEstimator):
         self.fdr_min_threshold_ = None
 
     def _validate_input(self):
-        """
-        Functions to validate the input parameters
-        """
-
         if not isinstance(self.n_bootstraps, int) or self.n_bootstraps <= 0:
             raise ValueError(f'n_bootstraps should be a positive integer, got {self.n_bootstraps}')
 
         if not isinstance(self.sample_fraction, float) or not (0.0 < self.sample_fraction):
-            raise ValueError(f'sample_fraction should be a positive float, got {self.sample_fraction}')
+            raise ValueError(f'sample_fraction should be a float in (0, 1], got {self.sample_fraction}')
 
         if isinstance(self.hard_threshold, float) and not (0.0 < self.hard_threshold <= 1):
             raise ValueError(f'If hard_threshold is set, it must be a float in (0, 1], got {self.hard_threshold}')
 
         if self.hard_threshold is None and self.artificial_type is None:
             raise ValueError(
-                f'When not using artificial features ("random_permutations" or "knockoff"), '
-                f'the user must define a hard_threshold of selection, got hard_threshold = {self.hard_threshold}'
+                f'When not using synthetic features (random permutations, knockoff or gaussian noise), '
+                f'the user must define a hard_threshold of selection, got {self.hard_threshold}'
             )
 
         if self.artificial_type is not None and not (0.0 < self.artificial_proportion <= 1.):
             raise ValueError(
-                f"When injecting artificial features, the artificial features proportion must be between 0 and 1. "
-                f"Got artificial_proportion = {self.artificial_proportion}"
+                f"When injecting noise, the noise proportion must be between 0 and 1, "
+                f"got {self.artificial_proportion}"
             )
 
         elif self.lambda_name not in self.base_estimator.get_params().keys():
-            raise ValueError(f'lambda_name = "{self.lambda_name}", '
-                             f'but base_estimator {self.base_estimator.__class__.__name__}'
-                             'does not have a parameter with that name')
+            raise ValueError(f'lambda_name is set to {self.lambda_name},'
+                             f' but base_estimator {self.base_estimator.__class__.__name__}'
+                             'does not have a parameter with that name'
+                             )
 
     def fit(self, X, y):
-        """Fit the Stabl model on the given data.
-
+        """Fit the stability selection model on the given data.
         Parameters
         ----------
-        X : array-like or sparse matrix, shape (n_samples, n_features)
+        X : array-like or sparse matrix, shape=(n_repeats, n_features)
             The training input samples.
-
-        y : array-like, shape(n_samples,)
+        y : array-like, shape=(n_repeats, )
             The target values.
         """
-
         self._validate_input()
 
         X, y = self._validate_data(
@@ -708,14 +755,14 @@ class Stabl(SelectorMixin, BaseEstimator):
         # Defining the number of injected noisy features
         n_injected_noise = int(X.shape[1] * self.artificial_proportion)
 
-        base_estimator = clone(self.base_estimator)  # Cloning the base estimator
+        base_estimator = clone(self.base_estimator)
 
-        # Initializing the stability scores
+        # Initializing the Stabl scores
         self.stabl_scores_ = np.zeros((n_features, n_lambdas))
 
-        # Artificial scores and features
+        # __Synthetic features and coefs__
         if self.artificial_type is not None:
-            # Only initialize those score if we use synthetic features 
+            # Only initialize those score if we use artificial features
             self.stabl_scores_artificial_ = np.zeros((n_injected_noise, n_lambdas))
             X = self._make_artificial_features(
                 X=X,
@@ -735,19 +782,22 @@ class Stabl(SelectorMixin, BaseEstimator):
         ):
 
             # Generating the bootstrap indices
-            bootstrap_indices = _bootstraps_generator(
+            bootstrap_indices = _bootstrap_generator(
                 n_bootstraps=self.n_bootstraps,
+                bootstrap_func=self.bootstrap_func,
                 y=y,
                 n_subsamples=n_subsamples,
                 replace=self.replace,
+                class_weight=self.sample_weight_bootstrap,
                 random_state=self.random_state
             )
 
-            # Computing the frequencies 
+            # Computing the frequencies
             selected_variables = Parallel(
                 n_jobs=self.n_jobs,
                 verbose=0,
-                pre_dispatch='2*n_jobs'
+                pre_dispatch='2*n_jobs',
+                backend="threading"
             )(delayed(fit_bootstrapped_sample)(
                 clone(base_estimator),
                 X=X[safe_mask(X, subsample_indices), :],
@@ -761,40 +811,31 @@ class Stabl(SelectorMixin, BaseEstimator):
 
             if self.artificial_type is not None:
                 self.stabl_scores_artificial_[:, idx] = np.vstack(selected_variables)[:, n_features:].mean(axis=0)
-
             self.stabl_scores_[:, idx] = np.vstack(selected_variables)[:, :n_features].mean(axis=0)
 
-        max_scores = np.max(self.stabl_scores_, axis=1)
-
         if self.artificial_type is not None:
-            max_scores_artificial = np.max(self.stabl_scores_artificial_, axis=1)
-
-            self._compute_FDRc(
-                artificial_proportion=self.artificial_proportion,
-                max_scores=max_scores,
-                max_scores_artificial=max_scores_artificial,
-                thresholds_grid=self.fdr_threshold_range
-            )
+            self._compute_FDRc()
 
         return self
 
-    def get_support(self, indices=False, new_threshold=None):
+    def get_support(self, indices=False, new_hard_threshold=None):
         """
         Get a mask, or integer index, of the features selected.
+
         Parameters
         ----------
         indices : bool, default=False
             If True, the return value will be an array of integers, rather
             than a boolean mask.
 
-        new_threshold: float or None, default=None
+        new_hard_threshold: float or None, default=None
             Threshold defining the minimum cutoff value for the
             stability scores. This is a hard hard_threshold: FDR control
             will be ignored if this is not None
 
         Returns
         -------
-        support : array
+        support : array-like
             An index that selects the retained features from a feature vector.
             If `indices` is False, this is a boolean array of shape
             [# input features], in which an element is True iff its
@@ -802,17 +843,17 @@ class Stabl(SelectorMixin, BaseEstimator):
             True, this is an integer array of shape [# output features] whose
             values are indices into the input feature vector.
         """
-        mask = self._get_support_mask(new_threshold=new_threshold)
+        mask = self._get_support_mask(new_hard_threshold=new_hard_threshold)
         return mask if not indices else np.where(mask)[0]
 
-    def get_feature_names_out(self, input_features=None, new_threshold=None):
+    def get_feature_names_out(self, input_features=None, new_hard_threshold=None):
         """Mask feature names according to selected features.
 
         Parameters
         ----------
-        new_threshold: float or None, default=None
+        new_hard_threshold: float or None, default=None
             Threshold defining the minimum cutoff value for the
-            stability scores. This is a hard hard_threshold: FDR control
+            stability scores. This is a hard threshold: FDR control
             will be ignored if this is not None
 
         input_features : array-like of str or None, default=None
@@ -830,33 +871,30 @@ class Stabl(SelectorMixin, BaseEstimator):
             Transformed feature names.
         """
         input_features = _check_feature_names_in(self, input_features)
-        return input_features[self.get_support(new_threshold=new_threshold)]
+        return input_features[self.get_support(new_hard_threshold=new_hard_threshold)]
 
-    def transform(self, X, new_threshold=None):
+    def transform(self, X, new_hard_threshold=False):
         """Reduce X to the selected features.
 
         Parameters
         ----------
-        X : array of shape=(n_samples, n_features)
+        X : array of shape=(n_repeats, n_features)
             The input array.
 
-        new_threshold: float or None, default=None
+        new_hard_threshold: float, "False" or None default=False
             Threshold defining the minimum cutoff value for the
             stability scores. This is a hard hard_threshold: FDR control
             will be ignored if this is not None.
+            When "False" the value set during the instanciation will be used.
 
         Returns
         -------
-        X_out : array of shape=(n_samples, n_selected_features)
+        X_out : array of shape=(n_repeats, n_selected_features)
             The input samples with only the selected features.
         """
-
         X = self._validate_data(X, reset=False)
 
-        mask = self.get_support(
-            indices=False,
-            new_threshold=new_threshold
-        )
+        mask = self.get_support(indices=False, new_hard_threshold=new_hard_threshold)
 
         if len(mask) != X.shape[1]:
             raise ValueError("X has a different shape than during fitting.")
@@ -869,27 +907,27 @@ class Stabl(SelectorMixin, BaseEstimator):
 
         return X[:, safe_mask(X, mask)]
 
-    def _get_support_mask(self, new_threshold=None):
+    def _get_support_mask(self, new_hard_threshold=None):
         """Get a mask, or integer index, of the features selected
 
         Parameters
         ----------
-        new_threshold: float or None, default=None
+        new_hard_threshold: float or None, default=False
             Threshold defining the minimum cutoff value for the
             stability scores. This is a hard hard_threshold: FDR control
             will be ignored if this is not None
-            
+
         Returns
         -------
         support : array
             An index that selects the retained features from a feature vector.
             This is a boolean array of shape
             [# input features], in which an element is True iff its
-            corresponding feature is selected for retention. 
+            corresponding feature is selected for retention.
         """
         check_is_fitted(self, 'stabl_scores_')
 
-        new_threshold = self.hard_threshold if new_threshold is None else new_threshold
+        new_threshold = self.hard_threshold if new_hard_threshold is None else new_hard_threshold
 
         if new_threshold is None:
             final_cutoff = self.fdr_min_threshold_
@@ -907,7 +945,7 @@ class Stabl(SelectorMixin, BaseEstimator):
 
         Parameters
         ----------
-        X : array-like, size=(n_samples, n_features)
+        X : array-like, size=(n_repeats, n_features)
             The input array.
 
         artificial_type: str
@@ -919,7 +957,7 @@ class Stabl(SelectorMixin, BaseEstimator):
 
         Returns
         -------
-        X_out : array-like, size=(n_samples, n_features + n_artificial_features)
+        X_out : array-like, size=(n_repeats, n_features + n_artificial_features)
             The input array concatenated with the artificial features
         """
         rng = np.random.default_rng(seed=random_state)
@@ -938,35 +976,18 @@ class Stabl(SelectorMixin, BaseEstimator):
             X_artificial = X_artificial[:, indices]
 
         else:
-            raise ValueError("The type of artificial feature must be in ['random permutation', 'knockoff']."
+            raise ValueError("The type of artificial feature must be in ['random_permutation', 'knockoff']."
                              f" Got {artificial_type}")
 
         self.X_artificial_ = X_artificial
 
         return np.concatenate([X, X_artificial], axis=1)
 
-    def _compute_FDRc(self, thresholds_grid, max_scores, max_scores_artificial, artificial_proportion):
+    def _compute_FDRc(self):
         """Function that computes the FDRc at each value of the `thresholds_grid`.
-        Also compute the hard_threshold minimizing the FDRc.
-
-        Parameters
-        ----------
-        thresholds_grid: array-like
-            The thresholds used observed to compute the FDR
-
-        max_scores: array-like
-            The max Stabl scores associated to each original feature
-
-        max_scores_artificial: array-like
-            The max Stabl scores associated to each artificial feature
-
-        artificial_proportion: float
-            The proportion of artificial features compared to the original ones
-
-        Returns
-        -------
-
+        Also compute the threshold minimizing the FDRc.
         """
+
         FDPs = []  # Initializing false discovery proportions
         artificial_proportion = self.artificial_proportion
         max_scores_artificial = np.max(self.stabl_scores_artificial_, axis=1)
