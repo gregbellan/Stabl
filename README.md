@@ -50,12 +50,12 @@ The "Sample Data" folder contains data for the following use cases:
 #### Training
 * **Outcome**: Days before Labor, `150` samples — `53` patients 
 * **Proteomics**: `150` samples — `1317` biomarkers
-* **CyTOF**: n_samples = `150` samples — `1502` biomarkers
-* **Metabolomics**: n_samples = `150` samples — `3529` biomarkers 
+* **CyTOF**: `150` samples — `1502` biomarkers
+* **Metabolomics**: `150` samples — `3529` biomarkers 
 #### Validation
 * **Outcome**: Days before Labor, `27` samples — `10` patients 
 * **Proteomics**: `21` samples — `1317` biomarkers
-* **CyTOF**: n_samples = `27` samples — `1502` biomarkers
+* **CyTOF**: `27` samples — `1502` biomarkers
 
 ### COVID-19
 #### Training
