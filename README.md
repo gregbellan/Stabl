@@ -3,7 +3,7 @@
 This is a scikit-learn compatible Python implementation of Stabl, coupled with useful functions and
 example notebooks to rerun the analyses on the different use cases located in the `sample data` folder
 
-[![DOI]](https://doi.org/10.21203/rs.3.rs-2609859/v1)
+[![DOI]](doi:10.5061/dryad.stqjq2c7d)
 
 ## Overview
 High-content omic technologies coupled with sparsity-promoting regularization methods (SRM) have transformed the 
@@ -32,7 +32,7 @@ clinical translation of complex multi-omic predictive models.
 ## Installation
 Install Directly from github:
 
-```commandline
+```
 pip install git+https://github.com/gregbellan/Stabl.git
 ```
 or 
@@ -46,8 +46,8 @@ git clone https://github.com/gregbellan/Stabl.git
 ```
 Install requirements and Stabl:
 
-```bash
-python install .
+```
+pip install .
 ```
 
 The general installation time is less than 10 seconds, and have been tested on mac OS and linux system.
