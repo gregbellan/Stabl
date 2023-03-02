@@ -30,6 +30,15 @@ clinical translation of complex multi-omic predictive models.
 
 
 ## Installation
+Install Directly from github:
+
+```commandline
+pip install git+https://github.com/gregbellan/Stabl.git
+```
+or 
+
+---
+
 Download Stabl:
 
 ```
