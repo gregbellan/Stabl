@@ -43,6 +43,13 @@ python install .
 
 The general installation time is less than 10 seconds, and have been tested on mac OS and linux system.
 
+## Input data
+When using your own data, you have to provide
+
+* The preprocessed input data matrix (preferably a pandas DataFrame having column names)
+* The outcomes (preferably a pandas Series having a names)
+* (Input Data and outcomes should have the same indices)
+
 ## Sample Data
 
 The "Sample Data" folder contains data for the following use cases:
