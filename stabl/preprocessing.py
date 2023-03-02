@@ -4,8 +4,36 @@ from sklearn.feature_selection import SelectorMixin
 from sklearn.utils.validation import check_is_fitted
 
 
+def remove_low_info_samples(X, threshold=1.0):
+    """Removes low info samples
+
+    A sample is considered to have sufficient info if the nan fraction is below the
+    input hard_threshold.
+    
+    Parameters
+    ----------
+    X : {array-like, sparse matrix}, shape (n_repeats, n_features)
+        Data from which to compute NaN proportion, where `n_repeats` is
+        the number of samples and `n_features` is the number of features.
+
+    threshold : float, default=1.0
+        Samples with a proportion of NaN greater than this value will be removed.
+    
+    Returns
+    -------
+    X_reduced : array, shape(n_samples_out, n_features)
+        The reduced array of siwe n_samples_out, n_features
+    """
+    if not isinstance(threshold, float) or (threshold < 0. or threshold > 1.):
+        raise ValueError(f"Nan fraction must be between 0 and 1 Got: {threshold}")
+
+    nan_fraction = np.isnan(X).sum(1) / X.shape[1]
+    mask = nan_fraction < threshold
+    return X[mask]
+
+
 class LowInfoFilter(SelectorMixin, BaseEstimator):
-    """Feature selector that removes all low-information features.
+    """Feature selector that removes all low-variance features.
 
     This feature selection algorithm looks only at the features (X), not the
     desired outputs (y), and can thus be used for unsupervised learning.
@@ -21,13 +49,13 @@ class LowInfoFilter(SelectorMixin, BaseEstimator):
 
     Attributes
     ----------
-    nan_counts_ : array-like, shape=(n_features_in_,)
+    nan_counts_ : array, shape (n_features,)
         Count of nan values for each individual feature.
 
     n_features_in_ : int
         Number of features seen during fit.
 
-    feature_names_in_ : array-like, shape=(n_features_in_,)
+    feature_names_in_ : ndarray of shape (n_features_in_,)
         Names of features seen during the fit. Defined only when X
         has feature names that are all strings.
 
@@ -47,8 +75,8 @@ class LowInfoFilter(SelectorMixin, BaseEstimator):
 
         Parameters
         ----------
-        X : {array-like, sparse matrix}, shape (n_samples, n_features)
-            Data from which to compute NaN proportion, where `n_samples` is
+        X : {array-like, sparse matrix}, shape (n_repeats, n_features)
+            Data from which to compute NaN proportion, where `n_repeats` is
             the number of samples and `n_features` is the number of features.
 
         y : any, default=None
@@ -71,13 +99,14 @@ class LowInfoFilter(SelectorMixin, BaseEstimator):
             raise ValueError(
                 f"Nan fraction must be between 0 and 1 Got: {self.max_nan_fraction}")
 
-        self.n_samples = X.shape[0]
+        n_samples = X.shape[0]
+        self.n_samples = n_samples
         self.nan_counts_ = np.isnan(np.array(X)).sum(0)
 
         if np.all(~np.isfinite(self.nan_counts_) | (
                 self.nan_counts_ > self.max_nan_fraction * self.n_samples)):
             msg = "No feature in X meets the low info hard_threshold {0:.5f}"
-            if self.n_samples == 1:
+            if n_samples == 1:
                 msg += " (X contains only one sample)"
             raise ValueError(msg.format(self.max_nan_fraction))
 
@@ -88,7 +117,7 @@ class LowInfoFilter(SelectorMixin, BaseEstimator):
             
         Returns
         -------
-        support : array-like
+        support : array
             An index that selects the retained features from a feature vector.
             This is a boolean array of shape
             [# input features], in which an element is True iff its
@@ -100,4 +129,5 @@ class LowInfoFilter(SelectorMixin, BaseEstimator):
 
     def _more_tags(self):
         # Useful to allow the use of nan values
+        # For the transform function ;)
         return {"allow_nan": True}

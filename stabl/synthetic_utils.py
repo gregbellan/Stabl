@@ -13,6 +13,7 @@ from sklearn.utils import resample
 from sklearn.base import clone
 
 from .stabl import Stabl
+from .metrics import jaccard_matrix, jaccard_similarity
 
 cv = RepeatedKFold(n_splits=5, n_repeats=3, random_state=42)
 
@@ -24,28 +25,6 @@ encv = ElasticNetCV(n_alphas=30, cv=5, max_iter=int(1e6))
 
 ridge = Ridge()
 ridgecv = RidgeCV(alphas=np.logspace(-2, 2, 30), cv=5, scoring='r2')
-
-
-def jaccard_similarity(list1, list2):
-    intersection = len(list(set(list1).intersection(list2)))
-    union = (len(list1) + len(list2)) - intersection
-    if intersection == 0 and union == 0:
-        return 0
-    return float(intersection) / union
-
-
-def jaccard_matrix(all_selected_features, remove_diag=True):
-    N = len(all_selected_features)
-    jaccard_mat = np.zeros((N, N))
-    for i in range(N):
-        for j in range(N):
-            jaccard_mat[i, j] = jaccard_similarity(
-                all_selected_features[i], all_selected_features[j])
-
-    if remove_diag:
-        jaccard_mat = jaccard_mat[~np.eye(jaccard_mat.shape[0], dtype=bool)].reshape(jaccard_mat.shape[0], -1)
-
-    return jaccard_mat
 
 
 def compute_est_FDR(stability_selection):
