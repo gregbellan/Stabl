@@ -544,6 +544,8 @@ def fit_bootstrapped_sample(
     selected_variables: array-like, shape=(n_features, )
         Boolean mask of the selected variables.
     """
+    np.random.RandomState(seed=42)
+
     base_estimator.set_params(**{lambda_name: lambda_value})
     base_estimator.fit(X, y)
 
@@ -778,7 +780,7 @@ class Stabl(SelectorMixin, BaseEstimator):
                 'Stabl progress',
                 total=n_lambdas,
                 colour='#001A7B',
-                leave=leave
+                leave=leave,
         ):
 
             # Generating the bootstrap indices
