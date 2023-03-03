@@ -443,7 +443,8 @@ def save_stabl_results(
     try:
         os.makedirs(path)
     except FileExistsError:
-        raise FileExistsError(f"Folder with path={path} already exists.")
+        raise FileExistsError(f"Folder with path={path} already exists. If you want to run again please provide another"
+                              f"folder name")
 
     # Saving the stability scores
     export_stabl_to_csv(stabl=stabl, path=path)
@@ -506,7 +507,8 @@ def fit_bootstrapped_sample(
         y,
         lambda_name,
         lambda_value,
-        threshold=None
+        threshold=None,
+        random_state=None
 ):
     """
     Fits base_estimator on a bootstrap sample of the original data,
@@ -544,7 +546,7 @@ def fit_bootstrapped_sample(
     selected_variables: array-like, shape=(n_features, )
         Boolean mask of the selected variables.
     """
-    np.random.RandomState(seed=42)
+    np.random.RandomState(seed=random_state)
 
     base_estimator.set_params(**{lambda_name: lambda_value})
     base_estimator.fit(X, y)
@@ -806,7 +808,8 @@ class Stabl(SelectorMixin, BaseEstimator):
                 y=y[subsample_indices],
                 lambda_name=self.lambda_name,
                 lambda_value=lambda_value,
-                threshold=self.bootstrap_threshold
+                threshold=self.bootstrap_threshold,
+                random_state=self.random_state
             )
               for subsample_indices in bootstrap_indices
               )
