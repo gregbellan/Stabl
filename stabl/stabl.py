@@ -680,6 +680,7 @@ class Stabl(SelectorMixin, BaseEstimator):
             bootstrap_func=classic_bootstrap,
             sample_weight_bootstrap=None,
             bootstrap_threshold=1e-5,
+            backend_multi=None,
             verbose=0,
             n_jobs=-1,
             random_state=None
@@ -696,6 +697,7 @@ class Stabl(SelectorMixin, BaseEstimator):
         self.bootstrap_func = bootstrap_func
         self.sample_weight_bootstrap = sample_weight_bootstrap
         self.bootstrap_threshold = bootstrap_threshold
+        self.backend_multi=backend_multi
         self.verbose = verbose
         self.n_jobs = n_jobs
         self.replace = replace
@@ -801,7 +803,7 @@ class Stabl(SelectorMixin, BaseEstimator):
                 n_jobs=self.n_jobs,
                 verbose=0,
                 pre_dispatch='2*n_jobs',
-                backend="threading"
+                backend=self.backend_multi
             )(delayed(fit_bootstrapped_sample)(
                 clone(base_estimator),
                 X=X[safe_mask(X, subsample_indices), :],
