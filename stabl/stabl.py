@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from warnings import warn
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,16 +10,60 @@ from joblib import Parallel, delayed
 from knockpy.knockoffs import GaussianSampler
 from sklearn.base import BaseEstimator, clone
 from sklearn.feature_selection import SelectorMixin, SelectFromModel
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.model_selection import ParameterGrid,  GroupShuffleSplit, KFold
 from sklearn.utils import safe_mask
 from sklearn.utils.class_weight import compute_sample_weight
 from sklearn.utils.validation import _check_feature_names_in, check_is_fitted
-from tqdm import tqdm
+from sklearn.metrics import r2_score, roc_auc_score
+from tqdm.autonotebook import tqdm
+from .unionfind import UnionFind
+import warnings
+from julia import Bigsimr as bs
+from julia import Distributions as dist
 
 from .visualization import boxplot_features, scatterplot_features
 
 
-def classic_bootstrap(y, n_subsamples, replace=True, class_weight=None, rng=np.random.default_rng(None)):
+def ss_cv(X, y, stab_sel):
+    stab_sel = clone(stab_sel)
+    stab_sel.set_params(auto_ss=False)
+    threshold_grid = np.arange(0.01, 1., 0.01)
+    splitter = KFold(n_splits=5, shuffle=True, random_state=42)
+    all_scores = []
+    task_type = "classification" if len(np.unique(y)) <= 2 else "regression"
+
+    linreg = LinearRegression(n_jobs=-1) if task_type == "regression" else LogisticRegression(penalty=None, class_weight="balanced", max_iter=int(1e6), random_state=stab_sel.random_state, n_jobs=-1)
+    for train, test in splitter.split(X, y):
+        X_train, X_test = X.iloc[train], X.iloc[test]
+        y_train, y_test = y.iloc[train], y.iloc[test]
+        stab_sel.fit(X_train, y_train)
+
+        tmp_scores = []
+        for t in threshold_grid:
+            sel_features = list(stab_sel.get_support(indices=True, new_hard_threshold=t))
+
+            if len(sel_features) > 0:
+                X_train_red = X_train.iloc[:, sel_features]
+                X_test_red = X_test.iloc[:, sel_features]
+
+                linreg.fit(X_train_red, y_train)
+                preds = linreg.predict(X_test_red) if task_type == "regression" else linreg.predict_proba(X_test_red)[:, 1]
+
+            else:
+                preds = [np.median(y_train) if task_type == "regression" else 0.5]*len(y_test)
+
+            tmp_scores.append(r2_score(y_test, preds) if task_type == "regression" else roc_auc_score(y_test, preds))
+
+        all_scores.append(tmp_scores)
+
+    avg_scores = np.mean(all_scores, axis=0)
+    best_threshold = threshold_grid[np.argmax(avg_scores)]
+
+    return best_threshold
+
+
+def classic_bootstrap(y, n_subsamples, replace=True, class_weight=None, rng=np.random.default_rng(None), **kwargs):
     """Function to create a bootstrap sample from the original dataset.
     Weights can be used to make some samples more likely to be selected.
 
@@ -28,7 +73,7 @@ def classic_bootstrap(y, n_subsamples, replace=True, class_weight=None, rng=np.r
         The outcome array for classification or regression
 
     n_subsamples : int
-        The number of subsamples indices returned by the bootstrap
+        The number of subsamples indices returned by the bootstrap 
 
     replace : bool, default=True
         Whether to replace samples when bootstrapping
@@ -86,13 +131,70 @@ def classic_bootstrap(y, n_subsamples, replace=True, class_weight=None, rng=np.r
     return sampled_indices
 
 
+def group_bootstrap(y, n_subsamples, groups, replace=False, rng=np.random.RandomState(None), **kwargs):
+    """Function to create a bootstrap sample from the original dataset.
+    Weights can be used to make some samples more likely to be selected.
+
+    Parameters
+    ----------
+    y : array-like, shape(n_repeats, )
+        The outcome array for classification or regression
+
+    n_subsamples : int
+        The number of subsamples indices returned by the bootstrap 
+
+    replace : bool, default=True
+        Whether to replace samples when bootstrapping
+
+    class_weight: str or dict or None, default=None
+        This is the sampling weights used in the bootstrap process
+            - If None, no weights are used.
+            - If 'balanced', the weights are automatically computed so that
+            the weights are balanced and the probabilities of sampling different
+            classes are adjusted.
+            - Can also be a dictionary of this format {class1:value1, class2:value2}
+            values are weights not probabilities. They will automatically be converted
+            into probabilities.
+
+    rng: np.random.default_rng, default=np.random.default_rng(None)
+        RandomState generator
+
+    Returns
+    -------
+    sampled_indices : array-like, shape(n_subsamples, )
+        Sampled indices
+
+    """
+    n_samples = y.shape[0]
+
+    if n_subsamples > n_samples and replace is False:
+        raise ValueError("When `replace` is set to False, n_subsamples cannot be greater than the "
+                         f"number of samples in the original dataset. Got `n_repeats`={n_samples} "
+                         f"and `n_subsamples`={n_subsamples}")
+
+    subsample_prop = n_subsamples / n_samples
+
+    sampled_indices = GroupShuffleSplit(n_splits=1, train_size=subsample_prop, random_state=rng).split(y, groups=groups)
+    sampled_indices = next(sampled_indices)[0]
+    # Handling the case of binary classification where we only select one class
+    if len(np.unique(y[sampled_indices])) < 2:
+        sampled_indices = group_bootstrap(
+            y,
+            n_subsamples,
+            groups=groups,
+            replace=replace,
+            rng=rng
+        )
+
+    return sampled_indices
+
+
 def _bootstrap_generator(
         n_bootstraps,
         bootstrap_func,
         y,
         n_subsamples,
         replace,
-        class_weight,
         random_state=None,
         **kwargs
 ):
@@ -105,11 +207,11 @@ def _bootstrap_generator(
         Number of bootstraps for each value of the lambda parameter.
 
     bootstrap_func: python function
-        The function use to draw the indices.
+        The function use to draw the indices. 
         Should have at least the following parameters:
             - y: target array
             - n_subsamples: number of samples to draw from the original data set
-            - replace: boolean indicating if we want to replace the samples
+            - replace: boolean indicating if we want to replace the samples 
 
     y: array-like, size(n_repeats, )
         Targets
@@ -118,7 +220,7 @@ def _bootstrap_generator(
         number of samples to draw from the original data set
 
     replace: bool
-        If set to True, the bootstrap will be done such that the samples are
+        If set to True, the bootstrap will be done such that the samples are 
         replaced during the process.
 
     random_state: int,
@@ -127,7 +229,7 @@ def _bootstrap_generator(
     **kwargs: arguments
         Further arguments we want to pass to bootstrap_func.
     """
-    rng = np.random.default_rng(random_state)
+    rng = np.random.RandomState(random_state)
     for _ in range(n_bootstraps):
 
         # Generating the bootstrapped indices
@@ -135,7 +237,6 @@ def _bootstrap_generator(
             y=y,
             n_subsamples=n_subsamples,
             replace=replace,
-            class_weight=class_weight,
             rng=rng,
             **kwargs
         )
@@ -171,9 +272,10 @@ def export_stabl_to_csv(stabl, path):
     else:
         X_columns = [f'x.{i + 1}' for i in range(stabl.n_features_in_)]
 
-    columns = [f"{stabl.lambda_name}'='{col: .3f}" for col in stabl.lambda_grid]
+    columns = list(ParameterGrid(stabl.lambda_grid))
 
-    df_real = pd.DataFrame(data=stabl.stabl_scores_, index=X_columns, columns=columns)
+    df_real = pd.DataFrame(data=stabl.stabl_scores_,
+                           index=X_columns, columns=columns)
     df_real.to_csv(Path(path, 'STABL scores.csv'))
 
     df_max_probs = pd.DataFrame(
@@ -184,7 +286,8 @@ def export_stabl_to_csv(stabl, path):
     df_max_probs.to_csv(Path(path, 'Max STABL scores.csv'))
 
     if stabl.artificial_type is not None:
-        synthetic_index = [f'artificial.{i + 1}' for i in range(stabl.X_artificial_.shape[1])]
+        synthetic_index = [
+            f'artificial.{i + 1}' for i in range(stabl.X_artificial_.shape[1])]
 
         df_noise = pd.DataFrame(
             data=stabl.stabl_scores_artificial_,
@@ -197,8 +300,10 @@ def export_stabl_to_csv(stabl, path):
             data={"Max Proba": stabl.stabl_scores_artificial_.max(axis=1)},
             index=synthetic_index
         )
-        df_max_probs_noise = df_max_probs_noise.sort_values(by='Max Proba', ascending=False)
-        df_max_probs_noise.to_csv(Path(path, 'Max STABL artificial scores.csv'))
+        df_max_probs_noise = df_max_probs_noise.sort_values(
+            by='Max Proba', ascending=False)
+        df_max_probs_noise.to_csv(
+            Path(path, 'Max STABL artificial scores.csv'))
 
 
 def plot_fdr_graph(
@@ -240,16 +345,18 @@ def plot_fdr_graph(
 
     thresh_grid = stabl.fdr_threshold_range
 
-    ax.plot(thresh_grid, stabl.FDRs_, color="#4D4F53", label='FDR estimate', lw=2)
+    ax.plot(thresh_grid, stabl.FDRs_, color="#4D4F53",
+            label='FDR estimate', lw=2)
 
-    if stabl.min_fdr_ > 1.:
+    if stabl.min_fdr_ > 1:
         optimal_threshold = 1.
         label = "No optimal threshold minimizing the FDR estimate"
     else:
         optimal_threshold = thresh_grid[np.argmin(stabl.FDRs_)]
         label = f"Optimal threshold={optimal_threshold:.2f}"
 
-    ax.axvline(optimal_threshold, ls='--', lw=1.5, color="#C41E3A", label=label)
+    ax.axvline(optimal_threshold, ls='--', lw=1.5,
+               color="#C41E3A", label=label)
     ax.set_xlabel('Threshold')
     ax.legend(loc='lower center', bbox_to_anchor=(0.5, 1))
     ax.grid(which='major', color='#DDDDDD', linewidth=0.8, axis="y")
@@ -310,69 +417,129 @@ def plot_stabl_path(
     threshold = stabl.hard_threshold if new_hard_threshold is None else new_hard_threshold
 
     if isinstance(threshold, float) and not (0.0 < threshold <= 1):
-        raise ValueError(f'If new_hard_threshold is set, it must be a float in (0, 1], got {threshold}')
+        raise ValueError(
+            f'If new_hard_threshold is set, it must be a float in (0, 1], got {threshold}')
 
     paths_to_highlight = stabl.get_support(new_hard_threshold=threshold)
 
-    x_grid = None
-    if stabl.lambda_name == 'alpha':
-        x_grid = np.min(stabl.lambda_grid) / stabl.lambda_grid
-
-    elif stabl.lambda_name == 'C':
-        x_grid = stabl.lambda_grid / np.max(stabl.lambda_grid)
+    x_grid_list = []
+    x_padding_list = []
+    order_list = []
+    different_params = stabl.get_different_parameters()
+    nb_different_params = len(different_params)
+    if nb_different_params <= 1:
+        if 'alpha' in stabl.lambda_grid:
+            x_grid_tmp = np.min(stabl.lambda_grid["alpha"]) / stabl.lambda_grid["alpha"]
+            x_padding = 0
+            order_list = [np.arange(len(stabl.lambda_grid["alpha"]))]
+            x_grid_list = [x_grid_tmp]
+            x_padding_list = [0]
+        elif 'C' in stabl.lambda_grid:
+            x_grid_tmp = stabl.lambda_grid["C"] / np.max(stabl.lambda_grid["C"])
+            x_padding = 0
+            order_list = [np.arange(len(stabl.lambda_grid["C"]))]
+            x_grid_list = [x_grid_tmp]
+            x_padding_list = [0]
+    elif nb_different_params == 2:
+        params = list(ParameterGrid(stabl.lambda_grid))
+        ordered_params = dict()
+        for i, k in enumerate(params):
+            l1_ratio = k["l1_ratio"]
+            penalty = k["alpha"] if "alpha" in k else k["C"]
+            if l1_ratio in ordered_params:
+                order = ordered_params[l1_ratio][0]
+                x_grid = ordered_params[l1_ratio][1]
+            else:
+                order = []
+                x_grid = []
+            order.append(i)
+            x_grid.append(penalty)
+            ordered_params[l1_ratio] = (order, x_grid)
+        figsize = (figsize[0] * len(ordered_params.keys()), figsize[1])
+        x_padding = 0
+        for l1_ratio in sorted(ordered_params.keys()):
+            order = np.array(ordered_params[l1_ratio][0])
+            penalties = np.array(ordered_params[l1_ratio][1])
+            if "alpha" in different_params:
+                x_grid = np.min(penalties) / penalties
+            elif "C" in different_params:
+                x_grid = penalties / np.max(penalties)
+            x_padding += np.max(x_grid) - np.min(x_grid) + 1e-5
+            x_grid_list.append(x_grid)
+            order_list.append(order)
+            x_padding_list.append(x_padding)
+    else:
+        warnings.warn("Cannot plot the STABL path for more than 2 parameters")
+        return
 
     fig, ax = plt.subplots(1, 1, figsize=figsize)
 
-    if not paths_to_highlight.all():
-        ax.plot(
-            x_grid,
-            stabl.stabl_scores_[~paths_to_highlight].T,
-            alpha=1,
-            lw=1.5,
-            color="#4D4F53",
-            label="Noisy features"
-        )
+    for i, o in enumerate(order_list):
+        x_grid = x_grid_list[i]
+        x_padding = x_padding_list[i]
+        x_grid += x_padding
+        if not paths_to_highlight.all():
+            ax.plot(
+                x_grid,
+                stabl.stabl_scores_[~paths_to_highlight][:, o].T,
+                alpha=1,
+                lw=1.5,
+                color="#4D4F53",
+                label="Noisy features"
+            )
 
-    if paths_to_highlight.any():
-        ax.plot(
-            x_grid,
-            stabl.stabl_scores_[paths_to_highlight].T,
-            alpha=1,
-            lw=2,
-            color="#C41E3A",
-            label="Stable features"
-        )
+        if paths_to_highlight.any():
+            ax.plot(
+                x_grid,
+                stabl.stabl_scores_[paths_to_highlight][:, o].T,
+                alpha=1,
+                lw=2,
+                color="#C41E3A",
+                label="Stable features"
+            )
 
-    if threshold is not None:
-        ax.plot(
-            x_grid,
-            threshold * np.ones_like(stabl.lambda_grid),
-            c="black",
-            ls="--",
-            label="Hard threshold"
-        )
+        if threshold is not None:
+            ax.plot(
+                x_grid,
+                threshold * np.ones(len(x_grid)),
+                c="black",
+                ls="--",
+                label=f"Hard threshold={threshold: .2f}"
+            )
 
-    if stabl.artificial_type is not None:
-        ax.plot(
-            x_grid,
-            stabl.stabl_scores_artificial_.T,
-            color="gray",
-            ls=":",
-            alpha=.4,
-            lw=1,
-            label="Artificial features"
-        )
+        elif stabl.artificial_type is not None:
+            ax.plot(
+                x_grid,
+                stabl.stabl_scores_artificial_[:, o].T,
+                color="gray",
+                ls=":",
+                alpha=.4,
+                lw=1,
+                label="Artificial features"
+            )
 
-    if stabl.artificial_type is not None and threshold is None:
-        ax.plot(
-            x_grid,
-            stabl.fdr_min_threshold_ * np.ones_like(stabl.lambda_grid),
-            c="black",
-            ls="--",
-            label=f"FDRc threshold={stabl.fdr_min_threshold_: .2f}"
-        )
+            ax.plot(
+                x_grid,
+                stabl.fdr_min_threshold_ * np.ones(len(x_grid)),
+                c="black",
+                ls="--",
+                label=f"FDP+ threshold={stabl.fdr_min_threshold_: .2f}"
+            )
 
-    ax.tick_params(left=True, right=False, labelleft=True, labelbottom=False, bottom=False)
+        if stabl.explore_threshold is not None:
+            ax.plot(
+                x_grid,
+                stabl.explore_threshold * np.ones(len(x_grid)),
+                c="#487fad",
+                ls="--",
+                label=f"Explore threshold={stabl.explore_threshold: .2f}"
+            )
+        if i != len(order_list) - 1:
+            x_vert_gray = np.max(x_grid)
+            ax.axvline(x=x_vert_gray, c="gray", ls="--", lw=1)
+
+    ax.tick_params(left=True, right=False, labelleft=True,
+                   labelbottom=False, bottom=False)
     ax.set_xlabel(r"$\lambda$")
     ax.set_ylabel(f"Frequency of selection")
     ax.grid(which='major', color='#DDDDDD', linewidth=0.8, axis="y")
@@ -433,7 +600,7 @@ def save_stabl_results(
 
     task_type: str, default="binary"
         Type of performed task.
-        Choose "binary" for binary classification and "regression" for regression tasks.
+        Choose "binary" for binary classification and "regression" for regression tasks or "multiclass"
     """
 
     check_is_fitted(stabl)
@@ -443,20 +610,10 @@ def save_stabl_results(
     try:
         os.makedirs(path)
     except FileExistsError:
-        raise FileExistsError(f"Folder with path={path} already exists. If you want to run again please provide another"
-                              f"folder name")
+        raise FileExistsError(f"Folder with path={path} already exists.")
 
     # Saving the stability scores
     export_stabl_to_csv(stabl=stabl, path=path)
-
-    plot_stabl_path(
-        stabl=stabl,
-        new_hard_threshold=new_hard_threshold,
-        show_fig=False,
-        export_file=True,
-        path=Path(path, f'Stability Path.{figure_fmt}'),
-        figsize=(4, 8)
-    )
 
     if stabl.artificial_type is not None:
         plot_fdr_graph(
@@ -467,7 +624,17 @@ def save_stabl_results(
             figsize=(8, 4)
         )
 
-    selected_features = stabl.get_feature_names_out(new_hard_threshold=new_hard_threshold)
+    plot_stabl_path(
+        stabl=stabl,
+        new_hard_threshold=new_hard_threshold,
+        show_fig=False,
+        export_file=True,
+        path=Path(path, f'Stability Path.{figure_fmt}'),
+        figsize=(4, 8)
+    )
+
+    selected_features = stabl.get_feature_names_out(
+        new_hard_threshold=new_hard_threshold)
 
     nb_selected_features = len(selected_features)
     df_selected_features = pd.DataFrame(
@@ -475,14 +642,16 @@ def save_stabl_results(
         index=[f"Feature n°{i + 1}" for i in range(nb_selected_features)]
     )
 
-    os.makedirs(Path(path, 'Selected Features'))
-    df_selected_features.to_csv(Path(path, "Selected Features", "Selected features.csv"))
+    Path(path, 'Selected Features').mkdir(parents=True)
+    df_selected_features.to_csv(
+        Path(path, "Selected Features", "Selected features.csv"))
 
-    if task_type == "binary":
+    if task_type in ["binary", "multiclass"]:
         boxplot_features(
             list_of_features=selected_features,
             df_X=df_X,
             y=y,
+            categorical_features=6,
             show_fig=False,
             export_file=True,
             path=Path(path, 'Selected Features'),
@@ -494,6 +663,7 @@ def save_stabl_results(
             list_of_features=selected_features,
             df_X=df_X,
             y=y,
+            categorical_features=6,
             show_fig=False,
             export_file=True,
             path=Path(path, 'Selected Features'),
@@ -505,10 +675,9 @@ def fit_bootstrapped_sample(
         base_estimator,
         X,
         y,
-        lambda_name,
-        lambda_value,
-        threshold=None,
-        random_state=None
+        lambda_val,
+        corr_groups=None,
+        threshold=None
 ):
     """
     Fits base_estimator on a bootstrap sample of the original data,
@@ -525,7 +694,7 @@ def fit_bootstrapped_sample(
     y: array-like, shape = [n_repeats]
         The target values.
 
-    lambda_name: str
+    lambda_val: dict
         Name of the penalization parameter of base_estimator
 
     lambda_value: float
@@ -546,9 +715,9 @@ def fit_bootstrapped_sample(
     selected_variables: array-like, shape=(n_features, )
         Boolean mask of the selected variables.
     """
-    np.random.RandomState(seed=random_state)
-
-    base_estimator.set_params(**{lambda_name: lambda_value})
+    base_estimator.set_params(**lambda_val)
+    if hasattr(base_estimator, "groups"):
+        base_estimator.set_params(groups=corr_groups)
     base_estimator.fit(X, y)
 
     features_selection = SelectFromModel(
@@ -606,6 +775,12 @@ class Stabl(SelectorMixin, BaseEstimator):
     fdr_threshold_range: array-like, default=np.arange(0.3, 1, 0.01)
         When using random permutation or knockoff features, the user can change the tested values for the hard_threshold
         For each value, the FDRc will be computed.
+
+    explore : bool, default=False
+        If True
+
+    cluster : int, default=None
+        Number of clusters to use for the stability selection. If None, no groups are calculated.
 
     bootstrap_threshold: string or float, default=None
         The hard_threshold value to use for feature selection. Features whose
@@ -666,10 +841,10 @@ class Stabl(SelectorMixin, BaseEstimator):
                 penalty='l1',
                 solver='liblinear',
                 class_weight='balanced',
-                max_iter=1_000_000
+                max_iter=int(1e6),
+                random_state=42
             ),
-            lambda_name='C',
-            lambda_grid=list(np.linspace(0.01, 1, 30)),
+            lambda_grid={"C": np.linspace(0.01, 1, 30)},
             n_bootstraps=1000,
             artificial_type="random_permutation",
             artificial_proportion=1.,
@@ -677,16 +852,22 @@ class Stabl(SelectorMixin, BaseEstimator):
             replace=False,
             hard_threshold=None,
             fdr_threshold_range=list(np.arange(0., 1., .01)),
+            explore=False,
+            n_explore=5,
             bootstrap_func=classic_bootstrap,
             sample_weight_bootstrap=None,
             bootstrap_threshold=1e-5,
-            backend_multi=None,
+            perc_corr_group_threshold=None,
+            sgl_groups=None,
+            # cluster=None,
             verbose=0,
             n_jobs=-1,
-            random_state=None
+            random_state=None,
+            feat_type=None,
+            corr=None,
+            auto_ss=False
     ):
         self.base_estimator = base_estimator
-        self.lambda_name = lambda_name
         self.lambda_grid = lambda_grid
         self.n_bootstraps = n_bootstraps
         self.artificial_type = artificial_type
@@ -694,29 +875,40 @@ class Stabl(SelectorMixin, BaseEstimator):
         self.sample_fraction = sample_fraction
         self.hard_threshold = hard_threshold
         self.fdr_threshold_range = fdr_threshold_range
+        self.explore = explore
+        self.n_explore = n_explore
         self.bootstrap_func = bootstrap_func
         self.sample_weight_bootstrap = sample_weight_bootstrap
         self.bootstrap_threshold = bootstrap_threshold
-        self.backend_multi=backend_multi
         self.verbose = verbose
         self.n_jobs = n_jobs
         self.replace = replace
         self.random_state = random_state
+        self.noise_group = np.array([])
+        self.perc_corr_group_threshold = perc_corr_group_threshold
+        self.sgl_groups = sgl_groups
         self.stabl_scores_ = None
         self.stabl_scores_artificial_ = None
         self.FDRs_ = None
         self.min_fdr_ = None
         self.fdr_min_threshold_ = None
+        self.explore_threshold = None
+        self.feat_type = feat_type
+        self.corr = corr
+        self.auto_ss = auto_ss
 
     def _validate_input(self):
         if not isinstance(self.n_bootstraps, int) or self.n_bootstraps <= 0:
-            raise ValueError(f'n_bootstraps should be a positive integer, got {self.n_bootstraps}')
+            raise ValueError(
+                f'n_bootstraps should be a positive integer, got {self.n_bootstraps}')
 
         if not isinstance(self.sample_fraction, float) or not (0.0 < self.sample_fraction):
-            raise ValueError(f'sample_fraction should be a float in (0, 1], got {self.sample_fraction}')
+            raise ValueError(
+                f'sample_fraction should be a float in (0, 1], got {self.sample_fraction}')
 
         if isinstance(self.hard_threshold, float) and not (0.0 < self.hard_threshold <= 1):
-            raise ValueError(f'If hard_threshold is set, it must be a float in (0, 1], got {self.hard_threshold}')
+            raise ValueError(
+                f'If hard_threshold is set, it must be a float in (0, 1], got {self.hard_threshold}')
 
         if self.hard_threshold is None and self.artificial_type is None:
             raise ValueError(
@@ -730,13 +922,34 @@ class Stabl(SelectorMixin, BaseEstimator):
                 f"got {self.artificial_proportion}"
             )
 
-        elif self.lambda_name not in self.base_estimator.get_params().keys():
-            raise ValueError(f'lambda_name is set to {self.lambda_name},'
-                             f' but base_estimator {self.base_estimator.__class__.__name__}'
-                             'does not have a parameter with that name'
-                             )
+    def _make_groups(self, X):
 
-    def fit(self, X, y):
+        nb_real = X.shape[1] - self.noise_group.shape[0]
+        X_real = X[:, :nb_real]
+
+        n = X_real.shape[1]
+
+        if self.perc_corr_group_threshold is not None:
+            u = UnionFind(elements=range(X.shape[1]))
+            corr_mat = pd.DataFrame(X_real).corr().values
+            corr_val = corr_mat[np.triu_indices_from(corr_mat, k=1)]
+            threshold = np.percentile(corr_val, self.perc_corr_group_threshold) - 0.1
+
+            for i in np.arange(n):
+                for j in np.arange(n):
+                    if corr_mat[i, j] > threshold:
+                        u.union(i, j)
+            for idx, i in enumerate(self.noise_group):
+                u.union(i, idx + n)
+
+            return list(map(np.array, map(list, u.components())))
+
+        elif self.sgl_groups is not None:
+            ng = self.noise_group
+            g = [np.concatenate((np.arange(i, i+5), n+ng[i:i+5])) for i in np.arange(0, 996, 5)]
+            return g
+
+    def fit(self, X, y, groups=None):
         """Fit the stability selection model on the given data.
         Parameters
         ----------
@@ -746,17 +959,20 @@ class Stabl(SelectorMixin, BaseEstimator):
             The target values.
         """
         self._validate_input()
+        X_old, y_old = X, y
 
-        X, y = self._validate_data(
+        X_, y = self._validate_data(
             X=X,
             y=y,
             reset=True,
             validate_separately=False
         )
+        X = pd.DataFrame(X_, index=X.index, columns=X.columns)
 
         n_samples, n_features = X.shape
         n_subsamples = int(np.floor(self.sample_fraction * n_samples))
-        n_lambdas = len(self.lambda_grid)
+        param_grid = list(ParameterGrid(self.lambda_grid))
+        n_lambdas = len(param_grid)
 
         # Defining the number of injected noisy features
         n_injected_noise = int(X.shape[1] * self.artificial_proportion)
@@ -769,22 +985,30 @@ class Stabl(SelectorMixin, BaseEstimator):
         # __Synthetic features and coefs__
         if self.artificial_type is not None:
             # Only initialize those score if we use artificial features
-            self.stabl_scores_artificial_ = np.zeros((n_injected_noise, n_lambdas))
-            X = self._make_artificial_features(
+            self.stabl_scores_artificial_ = np.zeros(
+                (n_injected_noise, n_lambdas))
+            X_ = self._make_artificial_features(
                 X=X,
                 nb_noise=n_injected_noise,
                 artificial_type=self.artificial_type,
                 random_state=self.random_state
             )
+            X = X_
+        X = np.array(X)
+        corr_groups = None
+        if self.perc_corr_group_threshold is not None or self.sgl_groups is not None:
+            corr_groups = self._make_groups(X)
 
         # --Loop--
         leave = (self.verbose > 0)
-        for idx, lambda_value in tqdm(
-                enumerate(self.lambda_grid),
+        for idx, lambda_val in tqdm(
+                enumerate(param_grid),
                 'Stabl progress',
                 total=n_lambdas,
                 colour='#001A7B',
                 leave=leave,
+                file=sys.stdout,
+                disable=(not leave)
         ):
 
             # Generating the bootstrap indices
@@ -794,6 +1018,7 @@ class Stabl(SelectorMixin, BaseEstimator):
                 y=y,
                 n_subsamples=n_subsamples,
                 replace=self.replace,
+                groups=groups,
                 class_weight=self.sample_weight_bootstrap,
                 random_state=self.random_state
             )
@@ -802,26 +1027,29 @@ class Stabl(SelectorMixin, BaseEstimator):
             selected_variables = Parallel(
                 n_jobs=self.n_jobs,
                 verbose=0,
-                pre_dispatch='2*n_jobs',
-                backend=self.backend_multi
+                pre_dispatch='2*n_jobs'
             )(delayed(fit_bootstrapped_sample)(
                 clone(base_estimator),
                 X=X[safe_mask(X, subsample_indices), :],
                 y=y[subsample_indices],
-                lambda_name=self.lambda_name,
-                lambda_value=lambda_value,
-                threshold=self.bootstrap_threshold,
-                random_state=self.random_state
+                corr_groups=corr_groups,
+                lambda_val=lambda_val,
+                threshold=self.bootstrap_threshold
             )
-              for subsample_indices in bootstrap_indices
-              )
+                for subsample_indices in bootstrap_indices
+            )
 
             if self.artificial_type is not None:
-                self.stabl_scores_artificial_[:, idx] = np.vstack(selected_variables)[:, n_features:].mean(axis=0)
-            self.stabl_scores_[:, idx] = np.vstack(selected_variables)[:, :n_features].mean(axis=0)
+                self.stabl_scores_artificial_[:, idx] = np.vstack(
+                    selected_variables)[:, n_features:].mean(axis=0)
+            self.stabl_scores_[:, idx] = np.vstack(selected_variables)[
+                :, :n_features].mean(axis=0)
 
         if self.artificial_type is not None:
             self._compute_FDRc()
+
+        if self.auto_ss:
+            self.hard_threshold = ss_cv(X_old, y_old, self)
 
         return self
 
@@ -880,7 +1108,7 @@ class Stabl(SelectorMixin, BaseEstimator):
         input_features = _check_feature_names_in(self, input_features)
         return input_features[self.get_support(new_hard_threshold=new_hard_threshold)]
 
-    def transform(self, X, new_hard_threshold=False):
+    def transform(self, X, new_hard_threshold=None):
         """Reduce X to the selected features.
 
         Parameters
@@ -888,11 +1116,10 @@ class Stabl(SelectorMixin, BaseEstimator):
         X : array of shape=(n_repeats, n_features)
             The input array.
 
-        new_hard_threshold: float, "False" or None default=False
-            Threshold defining the minimum cutoff value for the
-            stability scores. This is a hard hard_threshold: FDR control
-            will be ignored if this is not None.
-            When "False" the value set during the instanciation will be used.
+        new_hard_threshold: float or None, default=None
+            Threshold defining the cutoff value for the
+            stabl scores.
+            When None the value set during the instantiation will be used.
 
         Returns
         -------
@@ -901,7 +1128,8 @@ class Stabl(SelectorMixin, BaseEstimator):
         """
         X = self._validate_data(X, reset=False)
 
-        mask = self.get_support(indices=False, new_hard_threshold=new_hard_threshold)
+        mask = self.get_support(
+            indices=False, new_hard_threshold=new_hard_threshold)
 
         if len(mask) != X.shape[1]:
             raise ValueError("X has a different shape than during fitting.")
@@ -914,15 +1142,26 @@ class Stabl(SelectorMixin, BaseEstimator):
 
         return X[:, safe_mask(X, mask)]
 
+    def get_importances(self):
+        """Get the feature importances (stability scores)
+
+        Returns
+        -------
+        numpy.ndarray of shape (n_features_in_,)
+            Feature importances, computed as the max of the stability scores
+        """
+        check_is_fitted(self, 'stabl_scores_')
+        return np.max(self.stabl_scores_, axis=1)
+
     def _get_support_mask(self, new_hard_threshold=None):
         """Get a mask, or integer index, of the features selected
 
         Parameters
         ----------
-        new_hard_threshold: float or None, default=False
-            Threshold defining the minimum cutoff value for the
-            stability scores. This is a hard hard_threshold: FDR control
-            will be ignored if this is not None
+        new_hard_threshold: float or None, default=None
+            Threshold defining the cutoff value for the
+            stabl scores.
+            When None the value set during the instantiation will be used.
 
         Returns
         -------
@@ -930,7 +1169,7 @@ class Stabl(SelectorMixin, BaseEstimator):
             An index that selects the retained features from a feature vector.
             This is a boolean array of shape
             [# input features], in which an element is True iff its
-            corresponding feature is selected for retention.
+            corresponding feature is selected for retention. 
         """
         check_is_fitted(self, 'stabl_scores_')
 
@@ -943,6 +1182,15 @@ class Stabl(SelectorMixin, BaseEstimator):
 
         max_scores = np.max(self.stabl_scores_, axis=1)
         mask = max_scores > final_cutoff
+
+        if np.sum(mask) == 0 and self.explore is True:
+            final_cutoff = np.sort(max_scores)[-self.n_explore] - 0.01
+            self.explore_threshold = final_cutoff
+            mask = max_scores > final_cutoff
+
+        else:
+            self.explore_threshold = None
+
         return mask
 
     def _make_artificial_features(self, X, artificial_type, nb_noise, random_state=None):
@@ -967,19 +1215,62 @@ class Stabl(SelectorMixin, BaseEstimator):
         X_out : array-like, size=(n_repeats, n_features + n_artificial_features)
             The input array concatenated with the artificial features
         """
-        rng = np.random.default_rng(seed=random_state)
 
         if artificial_type == "random_permutation":
-            X_artificial = X.copy()
-            indices = rng.choice(a=X_artificial.shape[1], size=nb_noise, replace=False)
+            rng = np.random.default_rng(seed=random_state)
+            X_artificial = np.array(X).copy()
+            indices = rng.choice(
+                a=X_artificial.shape[1], size=nb_noise, replace=False)
+            self.noise_group = indices
             X_artificial = X_artificial[:, indices]
 
             for i in range(X_artificial.shape[1]):
                 rng.shuffle(X_artificial[:, i])
 
         elif artificial_type == "knockoff":
-            X_artificial = GaussianSampler(X, method='equicorrelated').sample_knockoffs()
+
+            def generate_noise(X_a):
+                corr = self.corr
+                feat_type = self.feat_type
+                # print(f"\n Generate noise : {feat_type} {corr}\n")
+                if feat_type is None or feat_type == "normal":
+                    return GaussianSampler(np.array(X_a), method='equicorrelated').sample_knockoffs()
+
+                X_b = pd.read_csv(f"./Norta/normal {corr}.csv", index_col=0).loc[X_a.index, X_a.columns]
+                X_b = (X_b - X_b.mean())/X_b.std()
+                X_artificial = GaussianSampler(np.array(X_b), method='equicorrelated').sample_knockoffs()
+                if "NB" in feat_type:
+                    margin = dist.NegativeBinomial(2, 0.1)
+                    for i in range(X_artificial.shape[1]):
+                        X_artificial[:, i] = bs.normal_to_margin(margin, X_artificial[:, i])
+
+                if "ZI" in feat_type:
+                    indices = rng.choice(X_artificial.size, X_artificial.size // 5, replace=False)
+                    old_shape = X_artificial.shape
+                    X_artificial = X_artificial.reshape(-1)
+                    X_artificial[indices] = 0
+                    X_artificial = X_artificial.reshape(old_shape)
+
+                X_artificial = (X_artificial - np.mean(X_artificial, axis=0))/np.std(X_artificial, axis=0)
+                return np.array(X_artificial)
+
+            np.random.seed(random_state)
+            rng = np.random.default_rng(seed=random_state)
+            n_features = X.shape[1]
+            if n_features > 3000:
+                initial_shape = (X.shape[0], (X.shape[1]//3000 + 1) * 3000)
+                X_artificial = np.empty(initial_shape)
+                for i in range(X.shape[1]//3000 + 1):
+                    cols = rng.choice(a=X.shape[1], size=3000, replace=False)
+                    X_tmp = X.iloc[:, cols].copy()
+                    X_art_tmp = generate_noise(X_tmp)
+                    X_artificial[:, i*3000: (i+1)*3000] = X_art_tmp
+                X_artificial = X_artificial[:, rng.choice(a=X_artificial.shape[1], size=X.shape[1], replace=False)]
+
+            else:
+                X_artificial = generate_noise(X.copy())
             indices = rng.choice(a=X_artificial.shape[1], size=nb_noise, replace=False)
+            self.noise_group = indices
             X_artificial = X_artificial[:, indices]
 
         else:
@@ -988,7 +1279,7 @@ class Stabl(SelectorMixin, BaseEstimator):
 
         self.X_artificial_ = X_artificial
 
-        return np.concatenate([X, X_artificial], axis=1)
+        return np.concatenate([np.array(X), X_artificial], axis=1)
 
     def _compute_FDRc(self):
         """Function that computes the FDRc at each value of the `thresholds_grid`.
@@ -1001,7 +1292,8 @@ class Stabl(SelectorMixin, BaseEstimator):
         max_scores = np.max(self.stabl_scores_, axis=1)
 
         for thresh in self.fdr_threshold_range:
-            num = np.sum((1 / artificial_proportion) * (max_scores_artificial > thresh)) + 1
+            num = np.sum((1 / artificial_proportion) *
+                         (max_scores_artificial > thresh)) + 1
             denum = max([1, np.sum((max_scores > thresh))])
             FDP = num / denum
             FDPs.append(FDP)
@@ -1012,6 +1304,13 @@ class Stabl(SelectorMixin, BaseEstimator):
         if self.min_fdr_ > 1.:
             final_cutoff = 1.
         else:
-            final_cutoff = np.min([self.fdr_threshold_range[np.argmin(self.FDRs_)], 1])
+            final_cutoff = np.min(
+                [self.fdr_threshold_range[np.argmin(self.FDRs_)], 1])
 
         self.fdr_min_threshold_ = final_cutoff
+
+    def get_different_parameters(self):
+        keys = set()
+        for p in ParameterGrid(self.lambda_grid):
+            keys.update(p.keys())
+        return list(keys)

@@ -5,6 +5,7 @@ from sklearn.metrics import roc_auc_score, r2_score, average_precision_score, \
     mean_absolute_error, mean_squared_error, precision_recall_curve, auc
 from sklearn.model_selection import RepeatedKFold, cross_val_predict, \
     ParameterGrid, LeaveOneOut
+from sklearn.base import clone
 
 
 def fit_predict(estimator, X, y, train, test, task_type):
@@ -50,7 +51,6 @@ def fit_predict(estimator, X, y, train, test, task_type):
         results = np.empty((n_samples, n_classes))
 
     results[:] = np.nan
-
     if task_type == 'binary':
         results[test] = estimator.fit(X[train], y[train]).predict_proba(X[test])[:, 1]
     elif task_type == "multiclass":
@@ -126,6 +126,170 @@ def nonpartition_cross_val_predict(
         median_prediction = median_prediction / np.sum(median_prediction, axis=1, keepdims=True)
 
     return predictions, median_prediction
+
+
+def nonpartition_gridsearch(
+        estimator,
+        param_grid,
+        X,
+        y,
+        task_type,
+        splitter=RepeatedKFold(n_splits=5, n_repeats=10),
+        groups=None
+):
+    """
+    GridSearch technique using non partition cross validation scheme.
+    This specific implementation should be used when we are interested
+    in predicting all samples through a cross-validation scheme and then
+    evaluate the score, rather than the score at each fold.
+
+    Parameters:
+    -----------
+    estimator: estimator
+        Estimator to be evaluated.
+
+    param_grid: dict
+        Different values of the parameter to test. Should be a dictionary
+
+    X: array-like
+        Input data.
+
+    y: array-like
+        Outcome.
+
+    splitter: non partition splitter
+        See nonpartition_cross_val_predict to see what can be used
+
+    task_type: str, default='predict_proba'
+        What type of prediction we make:
+        - 'predict_proba': we predict probabilities for each sample
+        - 'predict': we predict the class for classification and the value 
+        for regression task
+
+    Returns
+    -------
+    best_params : dict
+        best_params for this gridsearch in leave-one-out or leave-one-group-out
+    """
+
+    best_score = -100
+    best_preds = None
+    best_params = None
+    list_params = list(ParameterGrid(param_grid))
+
+    for p in list_params:
+        estim = clone(estimator).set_params(**p)
+        y_preds = nonpartition_cross_val_predict(
+            estimator=estim,
+            X=X,
+            y=y,
+            splitter=splitter,
+            task_type=task_type,
+            groups=groups
+        )[1]
+
+        if task_type == "binary":
+            score = roc_auc_score(y, y_preds)
+        elif task_type == "multiclass":
+            score = roc_auc_score(y, y_preds, multi_class="ovr")
+        elif task_type == "regression":
+            score = r2_score(y, y_preds)
+        else:
+            raise ValueError(f"`task_type` should be in ['binary', 'multiclass', 'regression']. Got {task_type}")
+
+        if score > best_score:
+            best_score = score
+            best_preds = y_preds
+            best_params = p
+
+    return clone(estimator).set_params(**best_params).fit(X,y), best_params, best_preds
+
+
+def loo_gridsearch(
+        estimator,
+        param_grid,
+        X,
+        y,
+        task_type,
+        cv=LeaveOneOut(),
+        groups=None
+):
+    """
+    GridSearch technique using Leave-one-out cross validation scheme.
+    Can also be used for leave-one-group-out.
+
+    This function differs from the scikit-learn by the evaluation technique.
+    Rather than evaluating the metric at each fold, the metric is evaluated 
+    after having computed the probabilities (or outcomes) for all samples.
+
+    The best parameters are chosen this way.
+
+    Parameters:
+    -----------
+    estimator: 
+        Estimator to be evaluated.
+
+    param_grid: dict
+        Different values of the parameter to test. Should be a dictionary
+
+    X: array-like, size(n_repeats, n_features)
+        Input data.
+
+    y: array-like, size(n_repeats, )
+        Outcome.
+
+    Returns
+    -------
+    best_params : dict
+        best_params for this gridsearch in leave-one-out or leave-one-group-out
+    """
+    scores = []
+    list_params = list(ParameterGrid(param_grid))
+
+    for p in list_params:
+        estimator.set_params(**p)
+        if task_type == "binary":
+            y_preds = cross_val_predict(
+                estimator,
+                X,
+                y,
+                cv=cv,
+                n_jobs=-1,
+                method='predict_proba',
+                groups=groups
+            )[:, 1]
+            score = roc_auc_score(y, y_preds)
+
+        elif task_type == 'regression':
+            y_preds = cross_val_predict(
+                estimator,
+                X,
+                y,
+                cv=cv,
+                n_jobs=-1,
+                groups=groups
+            )
+            score = r2_score(y, y_preds)
+
+        elif task_type == "multiclass":
+            y_preds = cross_val_predict(
+                estimator,
+                X,
+                y,
+                cv=cv,
+                n_jobs=-1,
+                groups=groups,
+                method="predict_proba"
+            )
+            score = roc_auc_score(y, y_preds, multi_class="ovr")
+
+        else:
+            raise ValueError(f"Task type is invalid, it should be in ['binary', 'multiclass', 'regression']. "
+                             f"Got {task_type}")
+
+        scores.append(score)
+
+    return list_params[np.argmax(scores)]
 
 
 def compute_CI(

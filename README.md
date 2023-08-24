@@ -19,21 +19,58 @@ clinical translation of complex multi-omic predictive models.
 
 ## Requirements
 
-* scikit-learn >= 1.1.2
-* knockpy >= 1.2
-* pandas >= 1.4.2
-* numpy >= 1.23.1
+Python packages:
+
 * joblib >= 1.1.0
 * tqdm >= 4.64.0
-* seaborn >= 0.12.0
 * matplotlib >= 3.5.2
+* numpy >= 1.23.1
+* cmake >= 3.27.1
+* knockpy >= 1.2
+* scikit-learn >= 1.1.2
+* seaborn >= 0.12.0
+* groupyr >= 0.3.2
+* pandas >= 1.4.2
+* statsmodels >= 0.14.0
+* openpyxl >= 3.0.7
+* adjustText >= 0.8
+* scipy >= 1.10.1
+* julia >= 0.6.1
+* osqp >= 0.6.2
 
+
+Julia package for noise generation (version 1.9.2) :
+
+* Bigsimr
+* Distributions
+* PyCall
 
 ## Installation
+
+### Julia installation
+To install Julia, please follow these instructions: 
+
+1. Download Julia from [here](https://julialang.org/downloads/).
+2. Follow the instructions for your operating system [here](https://julialang.org/downloads/platform/).
+3. Install the required julia packages :
+    ```
+
+    julia -e 'using Pkg; Pkg.add("Bigsimr"); Pkg.add("Distributions"); Pkg.add("PyCall")'
+
+    ```
+4. Finally, install Julia for python:
+    ```
+    python –m pip install julia
+    python -c "import julia; julia.install()"
+    ``` 
+
+### Python installation
+
 Install Directly from github:
 
 ```
 pip install git+https://github.com/gregbellan/Stabl.git
+pip install numpy==1.23.2
 ```
 or 
 
@@ -48,6 +85,7 @@ Install requirements and Stabl:
 
 ```
 pip install .
+pip install numpy==1.23.2
 ```
 
 The general installation time is less than 10 seconds, and have been tested on mac OS and linux system.
@@ -91,6 +129,12 @@ The "Sample Data" folder contains data for the following use cases:
 * **Outcome**: Control (`77`) Vs. SSI (`16`)
 * **CyTOF**: `93` samples — `1125` biomarkers
 * **Proteomics**: `91` samples — `721` biomarkers
+
+### Dream
+#### Training
+* **Outcome**: Preterm (`609`) Vs. Non-preterm (`960`) - 580 patients
+* **Taxonomy**: `1569` samples — `3725` biomarkers
+* **Phylotype**: `1569` samples — `5468` biomarkers
 
 ### Benchmarks
 * `Tutorial Notebooks.ipynb`: Tutorial on how to use the library

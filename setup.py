@@ -11,13 +11,22 @@ setuptools.setup(
     description='Stabl package',
     packages=['stabl'],
     install_requires=[
-        'scikit-learn>=1.1.2',
-        'knockpy>=1.2',
-        'pandas>=1.4.2',
-        'numpy>=1.23.1',
         'joblib>=1.1.0',
         'tqdm>=4.64.0',
-        'seaborn>=0.12.0',
-        'matplotlib>=3.5.2'
+        'matplotlib>=3.5.2',
+        # "numpy >= 1.23.1",
+        "cmake >= 3.27.1",
+        "knockpy >= 1.2",
+        "scikit-learn >= 1.1.2",
+        "seaborn >= 0.12.0",
+        "groupyr >= 0.3.2",
+        # "numpy >= 1.23.1",
+        "pandas >= 1.4.2",
+        "statsmodels>=0.14.0",
+        "openpyxl>=3.0.7",
+        "adjustText",
+        "scipy>=1.10.1",
+        "julia>=0.6.1",
+        "osqp==0.6.2",
     ]
 )
