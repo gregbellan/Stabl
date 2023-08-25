@@ -130,3 +130,7 @@ dmypy.json
 
 .DS_Store
 .idea/
+
+# Synthetic dataset
+Sample Data/Synthetic/*
+!Sample Data/Synthetic/runner.jl

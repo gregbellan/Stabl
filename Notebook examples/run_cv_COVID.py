@@ -10,7 +10,7 @@ from groupyr import SGL, LogisticSGL
 from sklearn.base import clone
 
 np.random.seed(42)
-outter_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=5, random_state=42)
+outter_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=20, random_state=42)
 chosen_inner_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=5, random_state=42)
 
 artificial_type = "knockoff"
