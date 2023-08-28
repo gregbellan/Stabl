@@ -19,6 +19,8 @@ clinical translation of complex multi-omic predictive models.
 
 ## Requirements
 
+Python version : from 3.7 up to 3.9
+
 Python packages:
 
 * joblib >= 1.1.0
@@ -64,7 +66,7 @@ To install Julia, please follow these instructions:
     python -c "import julia; julia.install()"
     ``` 
 
-### Python installation
+### Python installation (>= 3.7 and < 3.10)
 
 Install Directly from github:
 
