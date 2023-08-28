@@ -60,7 +60,7 @@ To install Julia, please follow these instructions:
     ```
 4. Finally, install Julia for python:
     ```
-    python –m pip install julia
+    pip install julia
     python -c "import julia; julia.install()"
     ``` 
 
