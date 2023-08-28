@@ -66,6 +66,16 @@ To install Julia, please follow these instructions:
     python -c "import julia; julia.install()"
     ``` 
 
+### CMake installation
+
+In order to install the python libraries required to generate the noise, we need to install :
+* CMake
+
+You can install this module by :
+* using the default system package manager, like on this [website](https://cgold.readthedocs.io/en/latest/first-step/installation.html)
+* following instructions on [CMake](https://cmake.org/install/).
+
+
 ### Python installation (>= 3.7 and < 3.10)
 
 Install Directly from github:
