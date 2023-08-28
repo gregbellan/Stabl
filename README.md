@@ -86,6 +86,7 @@ git clone https://github.com/gregbellan/Stabl.git
 Install requirements and Stabl:
 
 ```
+cd Stabl
 pip install .
 pip install numpy==1.23.2
 ```
