@@ -1,3 +1,4 @@
+from .visualization import boxplot_features, scatterplot_features
 import os
 from pathlib import Path
 from warnings import warn
@@ -19,11 +20,12 @@ from sklearn.metrics import r2_score, roc_auc_score
 from tqdm.autonotebook import tqdm
 from .unionfind import UnionFind
 import warnings
-from julia import Bigsimr as bs
+
+from julia.api import Julia
+jl = Julia(compiled_modules=False)
+
 from julia import Distributions as dist
-
-from .visualization import boxplot_features, scatterplot_features
-
+from julia import Bigsimr as bs
 
 def ss_cv(X, y, stab_sel):
     stab_sel = clone(stab_sel)

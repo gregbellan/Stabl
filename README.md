@@ -57,7 +57,7 @@ To install Julia, please follow these instructions:
 3. Install the required julia packages :
     ```
 
-    julia -e 'using Pkg; Pkg.add("Bigsimr"); Pkg.add("Distributions"); Pkg.add("PyCall")'
+    julia -e 'using Pkg; Pkg.add("Bigsimr"); Pkg.add("Distributions"); Pkg.add("PyCall"); Pkg.add(“IJulia”)'
 
     ```
 4. Finally, install Julia for python:
@@ -102,6 +102,11 @@ pip install numpy==1.23.2
 ```
 
 The general installation time is less than 10 seconds, and have been tested on mac OS and linux system.
+
+> **_NOTE:_**  If you are installing the library with conda, there is a behavior with Julia library:
+> - you can run the script in a notebook, but you need to run the import block two times. The first will throw an error and the second one will finalize the import.
+> - It is not possible to run the script in command line
+> To resolve this issue, either you install the library without conda or you run the script into a notebook.
 
 ## Input data
 When using your own data, you have to provide
