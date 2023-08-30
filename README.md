@@ -57,7 +57,7 @@ To install Julia, please follow these instructions:
 3. Install the required julia packages :
     ```
 
-    julia -e 'using Pkg; Pkg.add("Bigsimr"); Pkg.add("Distributions"); Pkg.add("PyCall"); Pkg.add(“IJulia”)'
+    julia -e 'using Pkg; Pkg.add("Bigsimr"); Pkg.add("Distributions"); Pkg.add("PyCall"); Pkg.add("IJulia")'
 
     ```
 4. Finally, install Julia for python:
