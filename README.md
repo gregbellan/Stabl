@@ -83,6 +83,7 @@ Install Directly from github:
 ```
 pip install git+https://github.com/gregbellan/Stabl.git
 pip install numpy==1.23.2
+unzip Sample\ Data/data.zip -d Sample\ Data/
 ```
 or 
 
@@ -99,13 +100,14 @@ Install requirements and Stabl:
 cd Stabl
 pip install .
 pip install numpy==1.23.2
+unzip Sample\ Data/data.zip -d Sample\ Data/
 ```
 
 The general installation time is less than 10 seconds, and have been tested on mac OS and linux system.
 
-> **_NOTE:_**  If you are installing the library with conda, there is a behavior with Julia library:
+> **_NOTE:_**  There is a behavior with Julia library:
 > - you can run the script in a notebook, but you need to run the import block two times. The first will throw an error and the second one will finalize the import.
-> - It is not possible to run the script in command line
+> - It is not possible to run the script in command line if you are installing the library with conda
 > To resolve this issue, either you install the library without conda or you run the script into a notebook.
 
 ## Input data
