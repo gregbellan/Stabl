@@ -1,3 +1,5 @@
+from julia.api import Julia
+jl = Julia(compiled_modules=False)
 import numpy as np
 import pandas as pd
 from stabl import data

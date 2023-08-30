@@ -109,6 +109,12 @@ The general installation time is less than 10 seconds, and have been tested on m
 > - you can run the script in a notebook, but you need to run the import block two times. The first will throw an error and the second one will finalize the import.
 > - It is not possible to run the script in command line if you are installing the library with conda
 > To resolve this issue, either you install the library without conda or you run the script into a notebook.
+> 
+> If there is still an issue with Julia in a notebook, run the following command in the first cell of the notebook:
+> ```
+>    from julia.api import Julia
+>    jl = Julia(compiled_modules=False) 
+> ```
 
 ## Input data
 When using your own data, you have to provide
