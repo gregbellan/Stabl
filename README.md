@@ -83,7 +83,7 @@ Install Directly from github:
 ```
 pip install git+https://github.com/gregbellan/Stabl.git
 pip install numpy==1.23.2
-unzip Sample\ Data/data.zip -d Sample\ Data/
+
 ```
 or 
 
@@ -100,7 +100,6 @@ Install requirements and Stabl:
 cd Stabl
 pip install .
 pip install numpy==1.23.2
-unzip Sample\ Data/data.zip -d Sample\ Data/
 ```
 
 The general installation time is less than 10 seconds, and have been tested on mac OS and linux system.
@@ -115,6 +114,21 @@ The general installation time is less than 10 seconds, and have been tested on m
 >    from julia.api import Julia
 >    jl = Julia(compiled_modules=False) 
 > ```
+
+## Use of the library
+
+To use the library and the associated benchmark in the folder `Notebook examples`, you need to download the repository :
+
+```
+git clone https://github.com/gregbellan/Stabl.git
+unzip Sample\ Data/data.zip -d Sample\ Data/
+```
+
+### Benchmarks
+* `Tutorial Notebook.ipynb`: Tutorial on how to use the library
+* `run_cv_*.py`: Python scripts to run the sample datas in Cross-Validation
+* `run_val_*.py`: Python scripts to run the sample datas in Training-Validation
+* `run_synthetic_*.py`: Python scripts to run the synthetic benchmarks
 
 ## Input data
 When using your own data, you have to provide
@@ -161,10 +175,6 @@ The "Sample Data" folder contains data for the following use cases:
 * **Outcome**: Preterm (`609`) Vs. Non-preterm (`960`) - 580 patients
 * **Taxonomy**: `1569` samples — `3725` biomarkers
 * **Phylotype**: `1569` samples — `5468` biomarkers
-
-### Benchmarks
-* `Tutorial Notebooks.ipynb`: Tutorial on how to use the library
-* `* Benchmarks.ipynb`: Jupyter Notebook rerunning all the benchmarks 
 
 ## Cite
 Julien Hedou, Ivana Maric, Grégoire Bellan et al. Stabl: sparse and reliable biomarker discovery in predictive modeling 
