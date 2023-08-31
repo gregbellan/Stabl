@@ -76,7 +76,7 @@ You can install this module by :
 * following instructions on [CMake](https://cmake.org/install/).
 
 
-### Python installation (>= 3.7 and < 3.10)
+### Python installation (>= 3.7 and < 3.11)
 
 Install Directly from github:
 
