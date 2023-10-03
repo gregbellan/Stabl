@@ -121,6 +121,7 @@ To use the library and the associated benchmark in the folder `Notebook examples
 
 ```
 git clone https://github.com/gregbellan/Stabl.git
+cd Stabl/
 unzip Sample\ Data/data.zip -d Sample\ Data/
 ```
 
