@@ -1,21 +1,16 @@
 from .unionfind import UnionFind
-from .utils import nonpartition_gridsearch
 import sys
-from sklearn.cluster import KMeans
 from tqdm.autonotebook import tqdm
-from groupyr import LogisticSGL, SGL, SGLCV, LogisticSGLCV
 from .pipelines_utils import save_plots, compute_scores_table, compute_pvalues_table
 from .stacked_generalization import stacked_multi_omic
 from .metrics import jaccard_matrix
-from .asgl import ALogitLasso, ALasso
 from .stabl import save_stabl_results
 from .preprocessing import remove_low_info_samples, LowInfoFilter
-from sklearn.svm import l1_min_c
-from sklearn.model_selection import RepeatedKFold, RepeatedStratifiedKFold, GridSearchCV, GroupShuffleSplit
+from sklearn.model_selection import RepeatedKFold, RepeatedStratifiedKFold, GroupShuffleSplit
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.linear_model import LogisticRegression, LogisticRegressionCV, LinearRegression, LassoCV, Lasso, ElasticNetCV, ElasticNet
+from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.impute import SimpleImputer
 from sklearn import clone
 from pathlib import Path
@@ -25,10 +20,10 @@ import pandas as pd
 import warnings
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.utils._testing import ignore_warnings
+
 warnings.filterwarnings('ignore')
 warnings.simplefilter('ignore', category=ConvergenceWarning)
 ConvergenceWarning('ignore')
-
 
 outter_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=20, random_state=42)
 
@@ -88,10 +83,10 @@ def multi_omic_stabl_cv(
     Parameters
     ----------
     data_dict: dict
-        Dictionary containing the input omic-files.
+        Dictionary containing the input omic-files. the input omic-files should be pandas DataFrames
 
     y: pd.Series
-        pandas Series containing the outcomes for the use case. Note that y should contains the union of outcomes for
+        pandas Series containing the outcomes for the use case. Note that y should contain the union of outcomes for
         the data_dict.
 
     outer_splitter: sklearn.model_selection._split.BaseCrossValidator
@@ -101,7 +96,9 @@ def multi_omic_stabl_cv(
         Inner cross validation splitter
 
     estimators : dict[str, sklearn estimator]
-        Dict of feature selectors to benchmark with their name as key. They must implement `fit`, `get_support(indices=True)`. It should contain :
+        Dict of feature selectors to benchmark with their name as key. They must implement `fit`,
+        `get_support(indices=True)`.
+        It should contain :
         - "lasso" : Lasso in GridSearchCV
         - "alasso" : ALasso in GridSearchCV
         - "en" : ElasticNet in GridSearchCV
@@ -185,8 +182,11 @@ def multi_omic_stabl_cv(
                 stabl_features_dict[model][omic_name] = pd.DataFrame(data=None, columns=["Threshold", "min FDP+"])
 
     k = 1
-    for train, test in (tbar := tqdm(outer_splitter.split(X_tot, y, groups=outer_groups), total=outer_splitter.get_n_splits(X=X_tot, y=y, groups=outer_groups), file=sys.stdout)):
-        # print(f" Iteration {k} over {outer_splitter.get_n_splits(X=X_tot)} ".center(80, '*'), "\n")
+    for train, test in (tbar := tqdm(
+            outer_splitter.split(X_tot, y, groups=outer_groups),
+            total=outer_splitter.get_n_splits(X=X_tot, y=y, groups=outer_groups),
+            file=sys.stdout
+    )):
         train_idx, test_idx = y.iloc[train].index, y.iloc[test].index
         groups = outer_groups.loc[train_idx].values if outer_groups is not None else None
 
@@ -423,7 +423,9 @@ def multi_omic_stabl_cv(
                     raise ValueError("task_type not recognized.")
         # __late fusion__
         if late_fusion:
-            preds_lf = late_fusion_cv(predictions_dict_late_fusion, y[test_idx], task_type, Path(save_path, "Training CV"), n_iter=n_iter_lf)
+            preds_lf = late_fusion_cv(
+                predictions_dict_late_fusion, y[test_idx], task_type, Path(save_path, "Training CV"), n_iter=n_iter_lf
+            )
             for model in preds_lf:
                 predictions_dict[model].loc[test_idx, f'Fold n°{k}'] = preds_lf[model]
 
@@ -1238,7 +1240,7 @@ def late_fusion_cv(
 
     Parameters
     ----------
-    predictions_lf_dict: dict of pd.DataFrame
+    predictions_lf_dict: dict[str, pd.DataFrame]
         Dictionary containing the prediction on each omic.
 
     y: pd.Series

@@ -8,7 +8,7 @@ from sklearn.model_selection import RepeatedStratifiedKFold, GroupShuffleSplit, 
 from sklearn.linear_model import LogisticRegression, Lasso, ElasticNet
 from stabl.stabl import Stabl
 from sklearn.base import clone
-from stabl.asgl import ALogitLasso, ALasso
+from stabl.adaptive import ALogitLasso, ALasso
 
 from stabl.metrics import jaccard_matrix
 from stabl.stacked_generalization import stacked_multi_omic

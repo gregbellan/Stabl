@@ -5,40 +5,40 @@ example notebooks to rerun the analyses on the different use cases located in th
 
 [![DOI]](doi:10.5061/dryad.stqjq2c7d)
 
-## Overview
-High-content omic technologies coupled with sparsity-promoting regularization methods (SRM) have transformed the 
+## Abstract
+High-content omic technologies coupled with sparsity-promoting regularization methods (SRM) have transformed the
 biomarker discovery process. However, the translation of computational results into a clinical use-case scenario remains
-challenging. A rate-limiting step is the rigorous selection of reliable biomarker candidates among a host of biological 
-features included in multivariate models. We propose Stabl, a machine learning framework that unifies the biomarker 
-discovery process with multivariate predictive modeling of clinical outcomes by selecting a sparse and reliable set of 
-biomarkers. Evaluation of Stabl on synthetic datasets and four independent clinical studies demonstrates improved 
-biomarker sparsity and reliability compared to commonly used SRMs at similar predictive performance. Stabl readily 
-extends to double- and triple-omics integration tasks and identifies a sparser and more reliable set of biomarkers than 
-those selected by state-of-the-art early- and late-fusion SRMs, thereby facilitating the biological interpretation and 
-clinical translation of complex multi-omic predictive models. 
+challenging. A rate-limiting step is the rigorous selection of reliable biomarker candidates among a host of biological
+features included in multivariable models. We propose Stabl, a general machine learning framework that unifies the
+biomarker discovery process with multivariable predictive modeling of clinical outcomes by selecting a sparse and 
+reliable set of biomarkers. Evaluation of Stabl on synthetic datasets and five independent clinical studies demonstrates
+improved biomarker sparsity and reliability compared to commonly used SRMs at similar predictive performance. Stabl 
+readily extends to double- and triple-omics integration tasks and identifies a sparser and more reliable set of 
+biomarkers than those selected by state-of-the-art early- and late-fusion SRMs, thereby facilitating the biological
+interpretation and clinical translation of complex multi-omic predictive models.
 
 ## Requirements
 
-Python version : from 3.7 up to 3.9
+Python version : from 3.7 up to 3.10
 
 Python packages:
 
-* joblib >= 1.1.0
-* tqdm >= 4.64.0
-* matplotlib >= 3.5.2
-* numpy >= 1.23.1
-* cmake >= 3.27.1
-* knockpy >= 1.2
-* scikit-learn >= 1.1.2
-* seaborn >= 0.12.0
-* groupyr >= 0.3.2
-* pandas >= 1.4.2
-* statsmodels >= 0.14.0
-* openpyxl >= 3.0.7
-* adjustText >= 0.8
-* scipy >= 1.10.1
-* julia >= 0.6.1
-* osqp >= 0.6.2
+* joblib == 1.1.0
+* tqdm == 4.64.0
+* matplotlib == 3.5.2
+* numpy == 1.23.1
+* cmake == 3.27.1
+* knockpy == 1.2
+* scikit-learn == 1.1.2
+* seaborn == 0.12.0
+* groupyr == 0.3.2
+* pandas == 1.4.2
+* statsmodels == 0.14.0
+* openpyxl == 3.0.7
+* adjustText == 0.8
+* scipy == 1.10.1
+* julia == 0.6.1
+* osqp == 0.6.2
 
 
 Julia package for noise generation (version 1.9.2) :
@@ -111,8 +111,8 @@ The general installation time is less than 10 seconds, and have been tested on m
 > 
 > If there is still an issue with Julia in a notebook, run the following command in the first cell of the notebook:
 > ```
->    from julia.api import Julia
->    jl = Julia(compiled_modules=False) 
+> from julia.api import Julia
+> jl = Julia(compiled_modules=False) 
 > ```
 
 ## Use of the library
@@ -129,6 +129,10 @@ unzip Sample\ Data/data.zip -d Sample\ Data/
 * `run_cv_*.py`: Python scripts to run the sample datas in Cross-Validation
 * `run_val_*.py`: Python scripts to run the sample datas in Training-Validation
 * `run_synthetic_*.py`: Python scripts to run the synthetic benchmarks
+
+> **_NOTE:_** 
+> The different scripts may take some time to begin because of the dependence with julia. However, once started, the 
+> time to run should come back to normal.
 
 ## Input data
 When using your own data, you have to provide

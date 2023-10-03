@@ -7,7 +7,7 @@ from stabl.multi_omic_pipelines import multi_omic_stabl_cv, multi_omic_stabl
 from sklearn.model_selection import RepeatedStratifiedKFold, GroupShuffleSplit, GridSearchCV, RepeatedKFold
 from sklearn.linear_model import LogisticRegression, Lasso, ElasticNet
 from stabl.stabl import Stabl
-from stabl.asgl import ALogitLasso, ALasso
+from stabl.adaptive import ALogitLasso, ALasso
 from groupyr import SGL, LogisticSGL
 from sklearn.base import clone
 

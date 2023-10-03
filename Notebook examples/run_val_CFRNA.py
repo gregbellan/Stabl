@@ -12,7 +12,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import VarianceThreshold
 from stabl.preprocessing import LowInfoFilter
 from sklearn.impute import SimpleImputer
-from stabl.asgl import ALogitLasso, ALasso
+from stabl.adaptive import ALogitLasso, ALasso
 from groupyr import SGL, LogisticSGL
 from sklearn.base import clone
 from sklearn.exceptions import ConvergenceWarning

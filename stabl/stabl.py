@@ -27,6 +27,7 @@ jl = Julia(compiled_modules=False)
 from julia import Distributions as dist
 from julia import Bigsimr as bs
 
+
 def ss_cv(X, y, stab_sel):
     stab_sel = clone(stab_sel)
     stab_sel.set_params(auto_ss=False)
@@ -969,8 +970,8 @@ class Stabl(SelectorMixin, BaseEstimator):
             reset=True,
             validate_separately=False
         )
-        X = pd.DataFrame(X_, index=X.index, columns=X.columns)
-
+        # X = pd.DataFrame(X_, index=X.index, columns=X.columns)
+        X = X_
         n_samples, n_features = X.shape
         n_subsamples = int(np.floor(self.sample_fraction * n_samples))
         param_grid = list(ParameterGrid(self.lambda_grid))
