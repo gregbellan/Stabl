@@ -21,7 +21,7 @@ setuptools.setup(
         "pandas==1.4.2",
         "statsmodels==0.14.0",
         "openpyxl==3.0.7",
-        "adjustText",
+        "adjustText==0.8",
         "scipy==1.10.1",
         "julia==0.6.1",
         "osqp==0.6.2",

@@ -13,6 +13,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.utils import resample
 from sklearn.base import clone
 
+from .unionfind import UnionFind
 from .metrics import jaccard_similarity, fdr_similarity, tpr_similarity, fscore_similarity
 from .visualization import make_beautiful_axis
 from .stacked_generalization import stacked_multi_omic
@@ -56,16 +57,17 @@ regression_prediction_metrics = {
 
 def _make_groups(X, percentile):
     n = X.shape[1]
-    u = unionfind.unionfind(n)
-    corr_mat = np.corrcoef(X, rowvar=False)
+    u = UnionFind(elements=range(n))
+    corr_mat = pd.DataFrame(X).corr().values
     corr_val = corr_mat[np.triu_indices_from(corr_mat, k=1)]
     threshold = np.percentile(corr_val, percentile)
-
     for i in np.arange(n):
         for j in np.arange(n):
             if abs(corr_mat[i, j]) > threshold:
-                u.unite(i, j)
-    return list(map(np.array, u.groups()))
+                u.union(i, j)
+    res = list(map(list, u.components()))
+    res = list(map(np.array, res))
+    return res
 
 
 def fscore_metrics(betas):

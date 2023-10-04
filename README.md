@@ -43,9 +43,9 @@ Python packages:
 
 Julia package for noise generation (version 1.9.2) :
 
-* Bigsimr
-* Distributions
-* PyCall
+* Bigsimr == 0.8.7
+* Distributions == 0.25.98
+* PyCall == 1.96.1
 
 ## Installation
 
@@ -57,7 +57,7 @@ To install Julia, please follow these instructions:
 3. Install the required julia packages :
     ```
 
-    julia -e 'using Pkg; Pkg.add("Bigsimr"); Pkg.add("Distributions"); Pkg.add("PyCall"); Pkg.add("IJulia")'
+    julia -e 'using Pkg; Pkg.add(name="Bigsimr", version="0.8.7"); Pkg.add(name="Distributions", version="0.25.98"); Pkg.add(name="PyCall", version="1.96.1"); Pkg.add("IJulia")'
 
     ```
 4. Finally, install Julia for python:
@@ -69,7 +69,7 @@ To install Julia, please follow these instructions:
 ### CMake installation
 
 In order to install the python libraries required to generate the noise, we need to install :
-* CMake
+* CMake (v3.27.4 for MacOS)
 
 You can install this module by :
 * using the default system package manager, like on this [website](https://cgold.readthedocs.io/en/latest/first-step/installation.html)
