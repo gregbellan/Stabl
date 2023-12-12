@@ -294,7 +294,7 @@ def fdr_similarity(list1, list2):
     tp = len(set(list1).intersection(list2))
     fp = len(set(list1).difference(list2))
     fn = len(set(list2).difference(list1))
-    if (fp + tp == 0):
+    if fp + tp == 0:
         return 0
 
     return fp / (tp + fp)
@@ -320,7 +320,7 @@ def tpr_similarity(list1, list2):
     tp = len(set(list1).intersection(list2))
     fp = len(set(list1).difference(list2))
     fn = len(set(list2).difference(list1))
-    if (fn + tp == 0):
+    if fn + tp == 0:
         return 0
 
     return tp / (tp + fn)
@@ -338,6 +338,9 @@ def fscore_similarity(list1, list2, beta=1):
     list2: array-like
         Second list of elements. Considered as the true set.
 
+    beta: int
+        f-score number
+
     Returns
     -------
     fdr between the two lists.
@@ -350,7 +353,7 @@ def fscore_similarity(list1, list2, beta=1):
     num = (1 + beta**2) * tp
     den = (1 + beta**2) * tp + beta**2 * fn + fp
 
-    if (den == 0):
+    if den == 0:
         return 0
 
     return num / den

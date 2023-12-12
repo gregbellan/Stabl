@@ -1,4 +1,3 @@
-from .visualization import boxplot_features, scatterplot_features
 import os
 from pathlib import Path
 from warnings import warn
@@ -11,59 +10,16 @@ from joblib import Parallel, delayed
 from knockpy.knockoffs import GaussianSampler
 from sklearn.base import BaseEstimator, clone
 from sklearn.feature_selection import SelectorMixin, SelectFromModel
-from sklearn.linear_model import LogisticRegression, LinearRegression
-from sklearn.model_selection import ParameterGrid,  GroupShuffleSplit, KFold
+from sklearn.linear_model import LogisticRegression, Lasso, ElasticNet
+from sklearn.model_selection import ParameterGrid,  GroupShuffleSplit
 from sklearn.utils import safe_mask
 from sklearn.utils.class_weight import compute_sample_weight
 from sklearn.utils.validation import _check_feature_names_in, check_is_fitted
-from sklearn.metrics import r2_score, roc_auc_score
 from tqdm.autonotebook import tqdm
 from .unionfind import UnionFind
 import warnings
-
-from julia.api import Julia
-jl = Julia(compiled_modules=False)
-
-from julia import Distributions as dist
-from julia import Bigsimr as bs
-
-
-def ss_cv(X, y, stab_sel):
-    stab_sel = clone(stab_sel)
-    stab_sel.set_params(auto_ss=False)
-    threshold_grid = np.arange(0.01, 1., 0.01)
-    splitter = KFold(n_splits=5, shuffle=True, random_state=42)
-    all_scores = []
-    task_type = "classification" if len(np.unique(y)) <= 2 else "regression"
-
-    linreg = LinearRegression(n_jobs=-1) if task_type == "regression" else LogisticRegression(penalty=None, class_weight="balanced", max_iter=int(1e6), random_state=stab_sel.random_state, n_jobs=-1)
-    for train, test in splitter.split(X, y):
-        X_train, X_test = X.iloc[train], X.iloc[test]
-        y_train, y_test = y.iloc[train], y.iloc[test]
-        stab_sel.fit(X_train, y_train)
-
-        tmp_scores = []
-        for t in threshold_grid:
-            sel_features = list(stab_sel.get_support(indices=True, new_hard_threshold=t))
-
-            if len(sel_features) > 0:
-                X_train_red = X_train.iloc[:, sel_features]
-                X_test_red = X_test.iloc[:, sel_features]
-
-                linreg.fit(X_train_red, y_train)
-                preds = linreg.predict(X_test_red) if task_type == "regression" else linreg.predict_proba(X_test_red)[:, 1]
-
-            else:
-                preds = [np.median(y_train) if task_type == "regression" else 0.5]*len(y_test)
-
-            tmp_scores.append(r2_score(y_test, preds) if task_type == "regression" else roc_auc_score(y_test, preds))
-
-        all_scores.append(tmp_scores)
-
-    avg_scores = np.mean(all_scores, axis=0)
-    best_threshold = threshold_grid[np.argmax(avg_scores)]
-
-    return best_threshold
+from .utils import auto_mode_lambda_grid
+from .visualization import boxplot_features, scatterplot_features
 
 
 def classic_bootstrap(y, n_subsamples, replace=True, class_weight=None, rng=np.random.default_rng(None), **kwargs):
@@ -233,6 +189,7 @@ def _bootstrap_generator(
         Further arguments we want to pass to bootstrap_func.
     """
     rng = np.random.RandomState(random_state)
+    subsamples = []
     for _ in range(n_bootstraps):
 
         # Generating the bootstrapped indices
@@ -243,12 +200,8 @@ def _bootstrap_generator(
             rng=rng,
             **kwargs
         )
-
-        if isinstance(subsample, tuple):
-            for item in subsample:
-                yield item
-        else:
-            yield subsample
+        subsamples.append(subsample)
+    return subsamples
 
 
 def export_stabl_to_csv(stabl, path):
@@ -275,7 +228,7 @@ def export_stabl_to_csv(stabl, path):
     else:
         X_columns = [f'x.{i + 1}' for i in range(stabl.n_features_in_)]
 
-    columns = list(ParameterGrid(stabl.lambda_grid))
+    columns = list(ParameterGrid(stabl.fitted_lambda_grid_))
 
     df_real = pd.DataFrame(data=stabl.stabl_scores_,
                            index=X_columns, columns=columns)
@@ -377,6 +330,98 @@ def plot_fdr_graph(
     return fig, ax
 
 
+def plot_fdr_graph_table(
+        stabl,
+        show_fig=True,
+        export_file=False,
+        path='./FDR table estimate graph.pdf',
+        figsize=(8, 4)
+):
+    """
+    Plots the FDR graph for all lambda.
+    The user can also export it to pdf of other format
+
+    Parameters
+    ----------
+    stabl : Stabl
+        Fitted Stabl instance.
+
+    show_fig : bool, default=True
+        Whether to display the figure
+
+    export_file: bool, default=False
+        If set to True, it will export the plot using the path
+
+    path: str or Path
+        Should be the string of the path/name. Use name of the file plus extension
+
+    figsize: tuple
+        Size of the Stabl fdr graph
+
+    Returns
+    -------
+    figure, axis
+    """
+
+    check_is_fitted(stabl, 'stabl_scores_')
+
+    def dict_format(d, form="{:6.3f}"):
+        if not isinstance(form, dict):
+            form = {k: form for k in d.keys()}
+        res = "{"
+        for k, v in d.items():
+            res += k + ":" + form[k].format(v)
+            res += ", "
+        res = res[:-2]
+        res += "}"
+        return res
+
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
+
+    thresh_grid = stabl.fdr_threshold_range
+
+    lambda_grid_list = list(ParameterGrid(stabl.fitted_lambda_grid_))
+    for i, l in enumerate(lambda_grid_list):
+        ax.plot(thresh_grid, stabl.fdrs_table[i], label=None, lw=0.5)
+
+    ax.plot(thresh_grid, stabl.FDRs_, color="#4D4F53",
+            label='FDR estimate', lw=2)
+
+    if stabl.min_fdr_ > 1:
+        optimal_threshold = 1.
+        label = "No optimal threshold minimizing the FDR estimate"
+    else:
+        optimal_threshold = thresh_grid[np.argmin(stabl.FDRs_)]
+        label = f"Optimal threshold={optimal_threshold:.2f}"
+
+    argmin_table = np.unravel_index(np.argmin(stabl.fdrs_table), stabl.fdrs_table.shape)
+    table_optimal_threshold = thresh_grid[argmin_table[1]]
+    selected_lambda_grid = dict_format(lambda_grid_list[argmin_table[0]])
+    table_label = f"Optimal table threshold={table_optimal_threshold:.2f}; {selected_lambda_grid}"
+
+    ax.axvline(optimal_threshold, ls='--', lw=1.5,
+               color="#C41E3A", label=label)
+
+    ax.axvline(table_optimal_threshold, ls='--', lw=1.5,
+               color="#e7a5b0", label=table_label)
+
+    ax.set_xlabel('Threshold')
+    ax.legend(loc='lower center', bbox_to_anchor=(0.5, 1))
+    ax.grid(which='major', color='#DDDDDD', linewidth=0.8, axis="y")
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    fig.tight_layout()
+
+    if export_file:
+        fig.savefig(path, dpi=95)
+
+    if not show_fig:
+        plt.close()
+
+    return fig, ax
+
+
 def plot_stabl_path(
         stabl,
         new_hard_threshold=None,
@@ -431,20 +476,18 @@ def plot_stabl_path(
     different_params = stabl.get_different_parameters()
     nb_different_params = len(different_params)
     if nb_different_params <= 1:
-        if 'alpha' in stabl.lambda_grid:
-            x_grid_tmp = np.min(stabl.lambda_grid["alpha"]) / stabl.lambda_grid["alpha"]
-            x_padding = 0
-            order_list = [np.arange(len(stabl.lambda_grid["alpha"]))]
+        if 'alpha' in stabl.fitted_lambda_grid_:
+            x_grid_tmp = np.min(stabl.fitted_lambda_grid_["alpha"]) / stabl.fitted_lambda_grid_["alpha"]
+            order_list = [np.arange(len(stabl.fitted_lambda_grid_["alpha"]))]
             x_grid_list = [x_grid_tmp]
             x_padding_list = [0]
-        elif 'C' in stabl.lambda_grid:
-            x_grid_tmp = stabl.lambda_grid["C"] / np.max(stabl.lambda_grid["C"])
-            x_padding = 0
-            order_list = [np.arange(len(stabl.lambda_grid["C"]))]
+        elif 'C' in stabl.fitted_lambda_grid_:
+            x_grid_tmp = stabl.fitted_lambda_grid_["C"] / np.max(stabl.fitted_lambda_grid_["C"])
+            order_list = [np.arange(len(stabl.fitted_lambda_grid_["C"]))]
             x_grid_list = [x_grid_tmp]
             x_padding_list = [0]
     elif nb_different_params == 2:
-        params = list(ParameterGrid(stabl.lambda_grid))
+        params = list(ParameterGrid(stabl.fitted_lambda_grid_))
         ordered_params = dict()
         for i, k in enumerate(params):
             l1_ratio = k["l1_ratio"]
@@ -476,11 +519,17 @@ def plot_stabl_path(
         return
 
     fig, ax = plt.subplots(1, 1, figsize=figsize)
+    x_order = []
+    x_list = []
 
     for i, o in enumerate(order_list):
         x_grid = x_grid_list[i]
         x_padding = x_padding_list[i]
         x_grid += x_padding
+        for j in x_grid:
+            x_list.append(j)
+        x_order.extend(o)
+
         if not paths_to_highlight.all():
             ax.plot(
                 x_grid,
@@ -511,15 +560,16 @@ def plot_stabl_path(
             )
 
         elif stabl.artificial_type is not None:
-            ax.plot(
-                x_grid,
-                stabl.stabl_scores_artificial_[:, o].T,
-                color="gray",
-                ls=":",
-                alpha=.4,
-                lw=1,
-                label="Artificial features"
-            )
+            if not stabl.pairwise:
+                ax.plot(
+                    x_grid,
+                    stabl.stabl_scores_artificial_[:, o].T,
+                    color="gray",
+                    ls=":",
+                    alpha=.4,
+                    lw=1,
+                    label="Artificial features"
+                )
 
             ax.plot(
                 x_grid,
@@ -562,7 +612,7 @@ def plot_stabl_path(
     if not show_fig:
         plt.close()
 
-    return fig, ax
+    return fig, ax, x_list, x_order
 
 
 def save_stabl_results(
@@ -572,7 +622,8 @@ def save_stabl_results(
         y,
         figure_fmt='pdf',
         new_hard_threshold=None,
-        task_type="binary"
+        task_type="binary",
+        override=False,
 ):
     """
     Function to automatically save all the results of a Stabl fitted instance.
@@ -587,14 +638,14 @@ def save_stabl_results(
     path: Path or str
         The path where to save the results. If the path already exists an error will be raised
 
-    figure_fmt: str
-        Format of the figures.
-
     df_X: pd.DataFrame, shape=(n_repeats, n_features)
         input DataFrame
 
     y: pd.Series, shape=(n_repeats)
         Series of output
+
+    figure_fmt: str
+        Format of the figures.
 
     new_hard_threshold: float or None, default=None
         Threshold defining the minimum cutoff value for the
@@ -611,7 +662,7 @@ def save_stabl_results(
     path = Path(path, '')
 
     try:
-        os.makedirs(path)
+        os.makedirs(path, exist_ok=override)
     except FileExistsError:
         raise FileExistsError(f"Folder with path={path} already exists.")
 
@@ -625,6 +676,13 @@ def save_stabl_results(
             export_file=True,
             path=Path(path, f'FDR Graph.{figure_fmt}'),
             figsize=(8, 4)
+        )
+        plot_fdr_graph_table(
+            stabl=stabl,
+            show_fig=False,
+            export_file=True,
+            path=Path(path, f'FDR table Graph.{figure_fmt}'),
+            figsize=(12, 8)
         )
 
     plot_stabl_path(
@@ -645,13 +703,13 @@ def save_stabl_results(
         index=[f"Feature n°{i + 1}" for i in range(nb_selected_features)]
     )
 
-    Path(path, 'Selected Features').mkdir(parents=True)
+    Path(path, 'Selected Features').mkdir(parents=True, exist_ok=override)
     df_selected_features.to_csv(
         Path(path, "Selected Features", "Selected features.csv"))
 
     if task_type in ["binary", "multiclass"]:
         boxplot_features(
-            list_of_features=selected_features,
+            features=selected_features,
             df_X=df_X,
             y=y,
             categorical_features=6,
@@ -663,7 +721,7 @@ def save_stabl_results(
 
     elif task_type == "regression":
         scatterplot_features(
-            list_of_features=selected_features,
+            features=selected_features,
             df_X=df_X,
             y=y,
             categorical_features=6,
@@ -697,11 +755,11 @@ def fit_bootstrapped_sample(
     y: array-like, shape = [n_repeats]
         The target values.
 
-    lambda_val: dict
-        Name of the penalization parameter of base_estimator
+    lambda_val: dict of parameters
+        Penalization parameters of base_estimator
 
-    lambda_value: float
-        Value of the penalization parameter
+    corr_groups: array-like, default=None
+        Groups of features based on the correlation matrix. It is used for sparse group lasso.
 
     threshold: string or float, default=None
         The hard_threshold value to use for feature selection. Features whose
@@ -748,12 +806,16 @@ class Stabl(SelectorMixin, BaseEstimator):
         must have either a ``feature_importances_`` or ``coef_``
         attribute after fitting.
 
-    lambda_name: str, default='C'
-        The name of the penalization parameter for the estimator
-        `base_estimator`. Example for LogisticRegression in scikit-learn: 'C'
-
-    lambda_grid: array-like, default=np.linspace(0.01, 1, 30)
+    lambda_grid: dict or "auto", default={"C": np.linspace(0.01, 1, 30)}
         Grid of values for the penalization parameter to iterate over.
+        The "auto" mode works only when the base_estimator is :
+        - LogisticRegression with l1 penalty (penalty='l1' or penalty='elasticnet')
+        - Lasso
+        - ElasticNet with l1_ratio > 0
+        or an extension of these classes.
+
+    n_lambda: int or None, default=None
+        If lambda_grid is set to "auto", this is the number of lambdas to test
 
     n_bootstraps: int, default=1000
         Number of bootstrap iterations for each value of lambda.
@@ -763,27 +825,45 @@ class Stabl(SelectorMixin, BaseEstimator):
         If None, we do not inject artificial features, the user must therefore define an arbitrary hard_threshold.
         When the artificial_type is none, we fall back into the classic stability selection process.
 
-    artificial_proportion: float
+    artificial_proportion: float, default=1.0
         The proportion of artificial features to
+
+    pairwise: bool, default=False
+        If True, then the statistics become the difference of frequency of selection between a feature and its
+        counterpart.
+        Note that if `pairwise` is set to True, the `artificial_proportion` will be set to 1.0
+
+    pairwise_form: str, default="v1"
+        - If "v1": the computation of the FDP+ is using (FP+TP) as the denominator
+        - If "v2": the computation of the FDP+ is using (FP) as the denominator
 
     sample_fraction: float, default=0.5
         The fraction of samples to be used in each bootstrap sample.
         Can be greater than 1 if we replace in the boostrap technique.
+
+    replace: bool, default=False
+        Whether to sample with replacement or not.
 
     hard_threshold: float, default=None
         Threshold defining the cutoff value for the stability selection.
         If the hard_threshold is defined, the FDRc will be bypassed.
         The default value is None: the user must set a value if no random permutation/knockoff is used.
 
-    fdr_threshold_range: array-like, default=np.arange(0.3, 1, 0.01)
+    fdr_threshold_range: array-like, default=np.arange(0., 1., .01)
         When using random permutation or knockoff features, the user can change the tested values for the hard_threshold
         For each value, the FDRc will be computed.
 
     explore : bool, default=False
-        If True
+        If True, Stabl will select `n_explore` best features if no features are selected by the FDR control.
 
-    cluster : int, default=None
-        Number of clusters to use for the stability selection. If None, no groups are calculated.
+    n_explore : int, default=5
+        Number of features to select if no features are selected by the FDR control.
+
+    bootstrap_func: python function, default=classic_bootstrap
+        Function to create a bootstrap sample from the original dataset. Look at `classic_bootstrap` for an example.
+
+    sample_weight_bootstrap: array-like, default=None
+        Class weight used in the bootstrap function.
 
     bootstrap_threshold: string or float, default=None
         The hard_threshold value to use for feature selection. Features whose
@@ -794,6 +874,12 @@ class Stabl(SelectorMixin, BaseEstimator):
         estimator has a parameter penalty set to l1, either explicitly
         or implicitly (e.g, Lasso), the hard_threshold used is 1e-5.
         Otherwise, "mean" is used by default.
+
+    perc_corr_group_threshold : float, default=None
+        Threshold used to define the groups based on the correlation.
+
+    sgl_groups : array-like, default=None
+        Group of real features.
 
     verbose: int, default=0
         Controls the verbosity: the higher, the more messages.
@@ -847,14 +933,17 @@ class Stabl(SelectorMixin, BaseEstimator):
                 max_iter=int(1e6),
                 random_state=42
             ),
-            lambda_grid={"C": np.linspace(0.01, 1, 30)},
+            lambda_grid=None,
+            n_lambda=None,
             n_bootstraps=1000,
             artificial_type="random_permutation",
             artificial_proportion=1.,
+            pairwise=False,
+            pairwise_form="v1",
             sample_fraction=0.5,
             replace=False,
             hard_threshold=None,
-            fdr_threshold_range=list(np.arange(0., 1., .01)),
+            fdr_threshold_range=None,
             explore=False,
             n_explore=5,
             bootstrap_func=classic_bootstrap,
@@ -862,19 +951,22 @@ class Stabl(SelectorMixin, BaseEstimator):
             bootstrap_threshold=1e-5,
             perc_corr_group_threshold=None,
             sgl_groups=None,
-            # cluster=None,
             verbose=0,
             n_jobs=-1,
-            random_state=None,
-            feat_type=None,
-            corr=None,
-            auto_ss=False
+            random_state=None
     ):
+        if fdr_threshold_range is None:
+            fdr_threshold_range = np.arange(0., 1., .01)
+
         self.base_estimator = base_estimator
-        self.lambda_grid = lambda_grid
+        self.lambda_grid = dict(C=np.linspace(0.01, 1, 10)) if lambda_grid is None else lambda_grid
+        self.n_lambda = n_lambda
+        self._check_lambda_grid()
         self.n_bootstraps = n_bootstraps
         self.artificial_type = artificial_type
-        self.artificial_proportion = artificial_proportion
+        self.artificial_proportion = artificial_proportion if pairwise is False else 1.0
+        self.pairwise = pairwise
+        self.pairwise_form = pairwise_form
         self.sample_fraction = sample_fraction
         self.hard_threshold = hard_threshold
         self.fdr_threshold_range = fdr_threshold_range
@@ -887,20 +979,79 @@ class Stabl(SelectorMixin, BaseEstimator):
         self.n_jobs = n_jobs
         self.replace = replace
         self.random_state = random_state
-        self.noise_group = np.array([])
         self.perc_corr_group_threshold = perc_corr_group_threshold
         self.sgl_groups = sgl_groups
+        self.noise_group = np.array([])
         self.stabl_scores_ = None
         self.stabl_scores_artificial_ = None
         self.FDRs_ = None
         self.min_fdr_ = None
         self.fdr_min_threshold_ = None
         self.explore_threshold = None
-        self.feat_type = feat_type
-        self.corr = corr
-        self.auto_ss = auto_ss
+        self.fitted_lambda_grid_ = None
+
+    def _check_lambda_grid(self):
+        """Check if the lambda_grid is valid. Raise error if not.
+        """
+        if isinstance(self.lambda_grid, str):
+            if self.lambda_grid != "auto":
+                raise ValueError(
+                    f'If lambda_grid is a string, it must be "auto", got {self.lambda_grid}'
+                )
+            base_estimator = self.base_estimator
+            while not isinstance(base_estimator, (LogisticRegression, Lasso, ElasticNet)) and hasattr(base_estimator, "model"):
+                base_estimator = base_estimator.model
+            if not isinstance(base_estimator, (LogisticRegression, Lasso, ElasticNet)):
+                raise ValueError(
+                    f'If lambda_grid is "auto", the base_estimator must be a LogisticRegression, '
+                    f'Lasso or ElasticNet, got {base_estimator}'
+                )
+            if isinstance(base_estimator, (LogisticRegression, ElasticNet)) and \
+                    base_estimator.l1_ratio is not None and \
+                    base_estimator.l1_ratio <= 0:
+                raise ValueError(
+                    f"If lambda_grid is 'auto' and the base_estimator is a LogisticRegression(penalty='elasticnet') "
+                    f"or ElasticNet, the l1_ratio must be greater than 0, got {self.base_estimator.l1_ratio}"
+                )
+        return
+
+    def _get_optimized_lambda_grid(self, X, y):
+        """Return the optimized lambda_grid for the base_estimator if lambda_grid is set to "auto".
+
+        Parameters
+        ----------
+        X : array-like, shape=(n_repeats, n_features)
+            Input data matrix
+        y : array-like, shape=(n_repeats, )
+            Outcomes
+
+        Returns
+        -------
+        lambda_grid : dict of parameters
+            Optimized lambda_grid for the base_estimator
+        """
+        if self.lambda_grid != "auto":
+            return self.lambda_grid
+
+        l1_ratio = None
+        n_lambda = 30 if self.n_lambda is None else self.n_lambda
+        if isinstance(self.base_estimator, LogisticRegression) or isinstance(getattr(self.base_estimator, "model", None), LogisticRegression):
+            task_type = "classification"
+            if getattr(self.base_estimator, "penalty", getattr(getattr(self.base_estimator, "model", None), "penalty", None)) == "elasticnet":
+                l1_ratio = [0.5, 0.7, 0.9]
+                n_lambda = 10 if self.n_lambda is None else self.n_lambda
+        else:
+            task_type = "regression"
+            if (isinstance(self.base_estimator, ElasticNet) and not isinstance(self.base_estimator, Lasso)) \
+                    or (isinstance(getattr(self.base_estimator, "model", None), ElasticNet) and not isinstance(getattr(self.base_estimator, "model", None), Lasso)):
+                l1_ratio = [0.5, 0.7, 0.9]
+                n_lambda = 10 if self.n_lambda is None else self.n_lambda
+
+        lambda_grid = auto_mode_lambda_grid(X, y, task_type, l1_ratio, n_lambda)
+        return lambda_grid
 
     def _validate_input(self):
+        """ Validate the input parameters. Raise error if not valid. """
         if not isinstance(self.n_bootstraps, int) or self.n_bootstraps <= 0:
             raise ValueError(
                 f'n_bootstraps should be a positive integer, got {self.n_bootstraps}')
@@ -925,8 +1076,29 @@ class Stabl(SelectorMixin, BaseEstimator):
                 f"got {self.artificial_proportion}"
             )
 
-    def _make_groups(self, X):
+        if self.pairwise is True and (0.0 < self.artificial_proportion < 1.):
+            raise ValueError(
+                f"When using pairwise exchangeability, the artificial proportion must be set to 1.0,"
+                f"got {self.artificial_proportion}"
+            )
 
+    def _make_groups(self, X):
+        """Make groups for self configuration.
+           If self.per_corr_group_threshold is not None, it will use the correlation matrix to make groups.
+
+           If self.sgl_groups is not None, it will use the groups defined by the user. 
+           The corresponding noise features will be in the same group as its real feature.
+
+        Parameters
+        ----------
+        X : array-like, shape=(n_repeats, n_features)
+            Data matrix with noise features
+
+        Returns
+        -------
+        groups : list of array-like, shape=(n_groups, ) or None
+            list of groups of features
+        """
         nb_real = X.shape[1] - self.noise_group.shape[0]
         X_real = X[:, :nb_real]
 
@@ -949,8 +1121,13 @@ class Stabl(SelectorMixin, BaseEstimator):
 
         elif self.sgl_groups is not None:
             ng = self.noise_group
-            g = [np.concatenate((np.arange(i, i+5), n+ng[i:i+5])) for i in np.arange(0, 996, 5)]
-            return g
+            u = UnionFind(elements=range(X.shape[1]))
+            for l_i in self.sgl_groups:
+                for i in l_i:
+                    u.union(i, l_i[0])
+            for idx, i in enumerate(ng):
+                u.union(i, idx + n)
+            return list(map(np.array, map(list, u.components())))
 
     def fit(self, X, y, groups=None):
         """Fit the stability selection model on the given data.
@@ -960,21 +1137,23 @@ class Stabl(SelectorMixin, BaseEstimator):
             The training input samples.
         y : array-like, shape=(n_repeats, )
             The target values.
+        groups : array-like, shape=(n_features, ) or None
+            Groups for the samples used while splitting the dataset into
         """
         self._validate_input()
-        X_old, y_old = X, y
 
-        X_, y = self._validate_data(
+        X, y = self._validate_data(
             X=X,
             y=y,
             reset=True,
             validate_separately=False
         )
-        # X = pd.DataFrame(X_, index=X.index, columns=X.columns)
-        X = X_
+
         n_samples, n_features = X.shape
         n_subsamples = int(np.floor(self.sample_fraction * n_samples))
-        param_grid = list(ParameterGrid(self.lambda_grid))
+        self.fitted_lambda_grid_ = self._get_optimized_lambda_grid(X, y)
+        param_grid = list(ParameterGrid(self.fitted_lambda_grid_))
+
         n_lambdas = len(param_grid)
 
         # Defining the number of injected noisy features
@@ -990,17 +1169,27 @@ class Stabl(SelectorMixin, BaseEstimator):
             # Only initialize those score if we use artificial features
             self.stabl_scores_artificial_ = np.zeros(
                 (n_injected_noise, n_lambdas))
-            X_ = self._make_artificial_features(
+            X = self._make_artificial_features(
                 X=X,
                 nb_noise=n_injected_noise,
                 artificial_type=self.artificial_type,
                 random_state=self.random_state
             )
-            X = X_
-        X = np.array(X)
         corr_groups = None
         if self.perc_corr_group_threshold is not None or self.sgl_groups is not None:
             corr_groups = self._make_groups(X)
+
+        # Generating the bootstrap indices
+        bootstrap_indices = _bootstrap_generator(
+            n_bootstraps=self.n_bootstraps,
+            bootstrap_func=self.bootstrap_func,
+            y=y,
+            n_subsamples=n_subsamples,
+            replace=self.replace,
+            groups=groups,
+            class_weight=self.sample_weight_bootstrap,
+            random_state=self.random_state
+        )
 
         # --Loop--
         leave = (self.verbose > 0)
@@ -1013,19 +1202,6 @@ class Stabl(SelectorMixin, BaseEstimator):
                 file=sys.stdout,
                 disable=(not leave)
         ):
-
-            # Generating the bootstrap indices
-            bootstrap_indices = _bootstrap_generator(
-                n_bootstraps=self.n_bootstraps,
-                bootstrap_func=self.bootstrap_func,
-                y=y,
-                n_subsamples=n_subsamples,
-                replace=self.replace,
-                groups=groups,
-                class_weight=self.sample_weight_bootstrap,
-                random_state=self.random_state
-            )
-
             # Computing the frequencies
             selected_variables = Parallel(
                 n_jobs=self.n_jobs,
@@ -1048,11 +1224,11 @@ class Stabl(SelectorMixin, BaseEstimator):
             self.stabl_scores_[:, idx] = np.vstack(selected_variables)[
                 :, :n_features].mean(axis=0)
 
-        if self.artificial_type is not None:
-            self._compute_FDRc()
+        if self.pairwise:
+            self.stabl_scores_ = self.stabl_scores_ - self.stabl_scores_artificial_[np.argsort(self.noise_group)]
 
-        if self.auto_ss:
-            self.hard_threshold = ss_cv(X_old, y_old, self)
+        if self.artificial_type is not None:
+            self._compute_FDPplus()
 
         return self
 
@@ -1187,7 +1363,8 @@ class Stabl(SelectorMixin, BaseEstimator):
         mask = max_scores > final_cutoff
 
         if np.sum(mask) == 0 and self.explore is True:
-            final_cutoff = np.sort(max_scores)[-self.n_explore] - 0.01
+            n_explore = min(self.n_explore, len(max_scores))
+            final_cutoff = np.sort(max_scores)[-n_explore] - 0.01
             self.explore_threshold = final_cutoff
             mask = max_scores > final_cutoff
 
@@ -1221,7 +1398,7 @@ class Stabl(SelectorMixin, BaseEstimator):
 
         if artificial_type == "random_permutation":
             rng = np.random.default_rng(seed=random_state)
-            X_artificial = np.array(X).copy()
+            X_artificial = X.copy()
             indices = rng.choice(
                 a=X_artificial.shape[1], size=nb_noise, replace=False)
             self.noise_group = indices
@@ -1231,47 +1408,23 @@ class Stabl(SelectorMixin, BaseEstimator):
                 rng.shuffle(X_artificial[:, i])
 
         elif artificial_type == "knockoff":
-
-            def generate_noise(X_a):
-                corr = self.corr
-                feat_type = self.feat_type
-                # print(f"\n Generate noise : {feat_type} {corr}\n")
-                if feat_type is None or feat_type == "normal":
-                    return GaussianSampler(np.array(X_a), method='equicorrelated').sample_knockoffs()
-
-                X_b = pd.read_csv(f"./Norta/normal {corr}.csv", index_col=0).loc[X_a.index, X_a.columns]
-                X_b = (X_b - X_b.mean())/X_b.std()
-                X_artificial = GaussianSampler(np.array(X_b), method='equicorrelated').sample_knockoffs()
-                if "NB" in feat_type:
-                    margin = dist.NegativeBinomial(2, 0.1)
-                    for i in range(X_artificial.shape[1]):
-                        X_artificial[:, i] = bs.normal_to_margin(margin, X_artificial[:, i])
-
-                if "ZI" in feat_type:
-                    indices = rng.choice(X_artificial.size, X_artificial.size // 5, replace=False)
-                    old_shape = X_artificial.shape
-                    X_artificial = X_artificial.reshape(-1)
-                    X_artificial[indices] = 0
-                    X_artificial = X_artificial.reshape(old_shape)
-
-                X_artificial = (X_artificial - np.mean(X_artificial, axis=0))/np.std(X_artificial, axis=0)
-                return np.array(X_artificial)
-
             np.random.seed(random_state)
             rng = np.random.default_rng(seed=random_state)
             n_features = X.shape[1]
+
             if n_features > 3000:
                 initial_shape = (X.shape[0], (X.shape[1]//3000 + 1) * 3000)
                 X_artificial = np.empty(initial_shape)
                 for i in range(X.shape[1]//3000 + 1):
                     cols = rng.choice(a=X.shape[1], size=3000, replace=False)
-                    X_tmp = X.iloc[:, cols].copy()
-                    X_art_tmp = generate_noise(X_tmp)
+                    X_tmp = X[:, cols]
+                    X_art_tmp = GaussianSampler(X_tmp, method='equicorrelated').sample_knockoffs()
                     X_artificial[:, i*3000: (i+1)*3000] = X_art_tmp
                 X_artificial = X_artificial[:, rng.choice(a=X_artificial.shape[1], size=X.shape[1], replace=False)]
 
             else:
-                X_artificial = generate_noise(X.copy())
+                X_artificial = GaussianSampler(X, method='equicorrelated').sample_knockoffs()
+
             indices = rng.choice(a=X_artificial.shape[1], size=nb_noise, replace=False)
             self.noise_group = indices
             X_artificial = X_artificial[:, indices]
@@ -1282,9 +1435,9 @@ class Stabl(SelectorMixin, BaseEstimator):
 
         self.X_artificial_ = X_artificial
 
-        return np.concatenate([np.array(X), X_artificial], axis=1)
+        return np.concatenate([X, X_artificial], axis=1)
 
-    def _compute_FDRc(self):
+    def _compute_FDPplus(self):
         """Function that computes the FDRc at each value of the `thresholds_grid`.
         Also compute the threshold minimizing the FDRc.
         """
@@ -1293,14 +1446,48 @@ class Stabl(SelectorMixin, BaseEstimator):
         artificial_proportion = self.artificial_proportion
         max_scores_artificial = np.max(self.stabl_scores_artificial_, axis=1)
         max_scores = np.max(self.stabl_scores_, axis=1)
+        fdrs_table = np.zeros((self.stabl_scores_.shape[1], self.fdr_threshold_range.shape[0]))
 
-        for thresh in self.fdr_threshold_range:
-            num = np.sum((1 / artificial_proportion) *
-                         (max_scores_artificial > thresh)) + 1
-            denum = max([1, np.sum((max_scores > thresh))])
-            FDP = num / denum
-            FDPs.append(FDP)
+        if self.pairwise:
+            for idx, feat_score in enumerate(self.stabl_scores_):
+                max_score, min_score = np.max(feat_score), np.min(feat_score)
+                if abs(max_score) - abs(min_score) < 0:
+                    self.stabl_scores_[idx] = -abs(feat_score)
+                else:
+                    self.stabl_scores_[idx] = abs(feat_score)
 
+            max_scores = np.max(self.stabl_scores_, axis=1)
+            min_scores = np.min(self.stabl_scores_, axis=1)
+
+            for thresh in self.fdr_threshold_range:
+                thresh_neg = -thresh
+                FP = np.sum((min_scores < thresh_neg))
+                TP = np.sum((max_scores > thresh))
+                if self.pairwise_form == "v1":
+                    FDP = (FP + 1)/max([1, TP + FP])
+                else:
+                    FDP = (FP + 1)/max([1, TP])
+                FDPs.append(FDP)
+
+        else:
+            for thresh in self.fdr_threshold_range:
+                num = np.sum((1 / artificial_proportion) *
+                             (max_scores_artificial > thresh)) + 1
+                denum = max([1, np.sum((max_scores > thresh))])
+                FDP = num / denum
+                FDPs.append(FDP)
+
+            for i in np.arange(self.stabl_scores_.shape[1]):
+                for j, thresh in enumerate(self.fdr_threshold_range):
+                    max_scores_artificial = self.stabl_scores_artificial_[:, i]
+                    max_scores = self.stabl_scores_[:, i]
+                    num = np.sum((1 / artificial_proportion) *
+                                 (max_scores_artificial > thresh)) + 1
+                    denum = max([1, np.sum((max_scores > thresh))])
+                    FDP = num / denum
+                    fdrs_table[i, j] = FDP
+
+        self.fdrs_table = fdrs_table
         self.FDRs_ = FDPs
         self.min_fdr_ = np.min(FDPs)
 
@@ -1313,7 +1500,10 @@ class Stabl(SelectorMixin, BaseEstimator):
         self.fdr_min_threshold_ = final_cutoff
 
     def get_different_parameters(self):
+        """Get all the parameters modified in the gridSearch of a Stabl object.
+        """
+        check_is_fitted(self, 'fitted_lambda_grid_')
         keys = set()
-        for p in ParameterGrid(self.lambda_grid):
+        for p in ParameterGrid(self.fitted_lambda_grid_):
             keys.update(p.keys())
         return list(keys)
