@@ -72,38 +72,19 @@ stabl_en = clone(stabl).set_params(
     verbose=1
 )
 
-stabl_sgl = clone(stabl).set_params(
-    base_estimator=sgl,
-    n_bootstraps=50,
-    perc_corr_group_threshold=99,
-    lambda_grid=[
-        {"alpha": np.logspace(-2, 0, 5), "l1_ratio": [.5]},
-        {"alpha": np.logspace(-2, 0, 5), "l1_ratio": [.7]},
-        {"alpha": np.logspace(-2, 0, 5), "l1_ratio": [.9]}
-    ],
-    verbose=1
-)
-
-
 estimators = {
     "lasso": lasso_cv,
     "alasso": alasso_cv,
     "en": en_cv,
-    "sgl": sgl_cv,
     "stabl_lasso": stabl,
     "stabl_alasso": stabl_alasso,
     "stabl_en": stabl_en,
-    "stabl_sgl": stabl_sgl,
 }
 
 models = [
     "STABL Lasso", "Lasso",
     "STABL ALasso", "ALasso",
     "STABL ElasticNet", "ElasticNet",
-    # "STABL SGL-90",
-    # "STABL SGL-95",
-    # "SGL-90",
-    # "SGL-95",
 ]
 
 print("Run CV on SSI dataset")
@@ -114,7 +95,7 @@ multi_omic_stabl_cv(
     inner_splitter=chosen_inner_cv,
     estimators=estimators,
     task_type=task_type,
-    save_path="./Results SSI",
+    save_path="./Benchmarks results/Results SSI",
     outer_groups=ids,
     early_fusion=True,
     models=models,

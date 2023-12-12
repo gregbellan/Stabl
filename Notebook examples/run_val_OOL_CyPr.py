@@ -83,7 +83,7 @@ multi_omic_stabl(
     y=y_train,
     estimators=estimators,
     task_type=task_type,
-    save_path="./Results OOL/CyPr",
+    save_path="./Benchmarks results/Results OOL/CyPr",
     groups=ids,
     early_fusion=True,
     X_test=X_valid,

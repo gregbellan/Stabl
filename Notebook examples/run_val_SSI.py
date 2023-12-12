@@ -96,7 +96,7 @@ multi_omic_stabl(
     y=y_train,
     estimators=estimators,
     task_type=task_type,
-    save_path="./Results SSI",
+    save_path="./Benchmarks results/Results SSI",
     early_fusion=True,
     n_iter_lf=1000,
     models=models,

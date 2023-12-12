@@ -135,6 +135,8 @@ dmypy.json
 
 *.csv
 
+/Benchmarks results/
+
 # Synthetic dataset
 Sample Data/Synthetic/*
 !Sample Data/Synthetic/runner.jl

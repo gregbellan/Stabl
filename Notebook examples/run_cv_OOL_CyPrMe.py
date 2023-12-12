@@ -84,7 +84,7 @@ multi_omic_stabl_cv(
     inner_splitter=chosen_inner_cv,
     estimators=estimators,
     task_type=task_type,
-    save_path="./Results OOL/CyPrMe",
+    save_path="./Benchmarks results/Results OOL/CyPrMe",
     outer_groups=ids,
     early_fusion=True,
     late_fusion=True,

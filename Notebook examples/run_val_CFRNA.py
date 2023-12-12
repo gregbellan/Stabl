@@ -102,10 +102,9 @@ warnings.filterwarnings("ignore")
 multi_omic_stabl(
     data_dict=X_train,
     y=y_train,
-    splitter=inner_group_cv,
     estimators=estimators,
     task_type=task_type,
-    save_path="./Results CFRNA",
+    save_path="./Benchmarks results/Results CFRNA",
     groups=ids,
     early_fusion=True,
     X_test=X_valid,

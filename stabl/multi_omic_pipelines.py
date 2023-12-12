@@ -604,12 +604,10 @@ def multi_omic_stabl(
     lasso = estimators["lasso"]
     alasso = estimators["alasso"]
     en = estimators["en"]
-    sgl = estimators["sgl"]
 
     stabl = estimators["stabl_lasso"]
     stabl_alasso = estimators["stabl_alasso"]
     stabl_en = estimators["stabl_en"]
-    stabl_sgl = estimators["stabl_sgl"]
 
     os.makedirs(Path(save_path, "Training-Validation"), exist_ok=True)
     os.makedirs(Path(save_path, "Summary"), exist_ok=True)

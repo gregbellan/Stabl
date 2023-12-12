@@ -45,7 +45,7 @@ alasso_cv = GridSearchCV(
 # Stabl
 stabl = Stabl(
     base_estimator=lasso,
-    n_bootstraps=5000,
+    n_bootstraps=500,
     artificial_type=artificial_type,
     artificial_proportion=1.,
     replace=False,
@@ -70,7 +70,8 @@ stabl_en = clone(stabl).set_params(
         {"C": np.logspace(-2, 1, 10), "l1_ratio": [0.7]},
         {"C": np.logspace(-2, 1, 10), "l1_ratio": [0.9]}
     ],
-    verbose=1)
+    verbose=1
+)
 
 estimators = {
     "lasso": lasso_cv,
@@ -83,7 +84,7 @@ estimators = {
 models = [
     "STABL Lasso",  "Lasso",
     "STABL ALasso",  "ALasso",
-    "STABL ElasticNet",  "ElasticNet"
+    #"STABL ElasticNet",  "ElasticNet"
 ]
 
 X_train, X_valid, y_train, y_valid, ids, task_type = data.load_covid_19("./Sample Data/COVID-19")
@@ -99,7 +100,7 @@ multi_omic_stabl(
     y=y_train,
     estimators=estimators,
     task_type=task_type,
-    save_path="./Results COVID-19",
+    save_path="./Benchmarks results/Results COVID-19",
     groups=ids,
     early_fusion=True,
     X_test=X_valid,
