@@ -70,8 +70,6 @@ stabl_en = clone(stabl).set_params(
     base_estimator=en,
     n_bootstraps=50,
     lambda_grid=[
-        {"C": np.logspace(-3, -2, 5), "l1_ratio": [.2]},
-        {"C": np.logspace(-3, -2, 5), "l1_ratio": [.5]},
         {"C": np.logspace(-3, -2, 5), "l1_ratio": [.8]}
     ],
     verbose=1

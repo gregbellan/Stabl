@@ -51,9 +51,7 @@ stabl_alasso = clone(stabl).set_params(
 stabl_en = clone(stabl).set_params(
     base_estimator=en,
     lambda_grid=[
-        {"alpha": np.logspace(1, 2, 5), "l1_ratio": [.5]},
-        {"alpha": np.logspace(0.5, 2, 5), "l1_ratio": [.7]},
-        {"alpha": np.logspace(0.5, 2, 5), "l1_ratio": [.9]},
+        {"alpha": np.logspace(0.5, 2, 5), "l1_ratio": [.9]}
     ],
     verbose=1)
 

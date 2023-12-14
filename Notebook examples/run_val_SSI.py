@@ -44,7 +44,7 @@ alasso_cv = GridSearchCV(
 # Stabl
 stabl = Stabl(
     base_estimator=lasso,
-    n_bootstraps=5000,
+    n_bootstraps=1000,
     artificial_type=artificial_type,
     artificial_proportion=1.,
     replace=False,
@@ -65,9 +65,7 @@ stabl_en = clone(stabl).set_params(
     base_estimator=en,
     n_bootstraps=1000,
     lambda_grid=[
-        {"C": np.logspace(-2, 0, 10), "l1_ratio": [.5]},
-        {"C": np.logspace(-2, 0, 10), "l1_ratio": [.7]},
-        {"C": np.logspace(-2, 0, 10), "l1_ratio": [.9]},
+        {"C": np.logspace(-2, 0, 10), "l1_ratio": [.9]}
     ],
     verbose=1
 )

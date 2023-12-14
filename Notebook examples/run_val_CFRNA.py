@@ -39,7 +39,7 @@ alasso_cv = GridSearchCV(alasso, scoring='roc_auc', param_grid={"C": np.logspace
 # Stabl
 stabl = Stabl(
     base_estimator=lasso,
-    n_bootstraps=300,
+    n_bootstraps=200,
     artificial_type=artificial_type,
     artificial_proportion=1,
     replace=False,
@@ -60,8 +60,6 @@ stabl_en = clone(stabl).set_params(
     base_estimator=en,
     n_bootstraps=100,
     lambda_grid=[
-        {"C": np.logspace(-3, -1, 10), "l1_ratio": [0.5]},
-        {"C": np.logspace(-3, -1, 10), "l1_ratio": [0.7]},
         {"C": np.logspace(-3, -1, 10), "l1_ratio": [0.9]}
     ],
     verbose=1

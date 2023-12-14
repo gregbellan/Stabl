@@ -66,9 +66,7 @@ stabl_en = clone(stabl).set_params(
     base_estimator=en,
     n_bootstraps=200,
     lambda_grid=[
-        {"C": np.logspace(-2, 1, 10), "l1_ratio": [0.5]},
-        {"C": np.logspace(-2, 1, 10), "l1_ratio": [0.7]},
-        {"C": np.logspace(-2, 1, 10), "l1_ratio": [0.9]}
+        {"C": np.logspace(-2, 1, 10), "l1_ratio": [0.9]},
     ],
     verbose=1
 )
@@ -84,7 +82,7 @@ estimators = {
 models = [
     "STABL Lasso",  "Lasso",
     "STABL ALasso",  "ALasso",
-    #"STABL ElasticNet",  "ElasticNet"
+    "STABL ElasticNet",  "ElasticNet"
 ]
 
 X_train, X_valid, y_train, y_valid, ids, task_type = data.load_covid_19("./Sample Data/COVID-19")

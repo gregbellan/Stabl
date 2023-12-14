@@ -8,10 +8,19 @@ from stabl.adaptive import ALogitLasso
 from sklearn.base import clone
 
 np.random.seed(42)
-outter_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=20, random_state=42)
-chosen_inner_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=5, random_state=42)
 
-artificial_type = "knockoff"
+# Defining outer Cross-Validation (CV) loop and inner CV loop
+# The outer loop is used as the general evaluation framework whereas the inner loop is used to tune models at each fold
+
+# Full version
+# outter_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=20, random_state=42)
+# chosen_inner_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=5, random_state=42)
+
+# Rapid test version
+outter_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=2, random_state=42)
+chosen_inner_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=2, random_state=42)
+
+artificial_type = "knockoff"  # or "random_permutation"
 
 # Lasso
 lasso = LogisticRegression(
@@ -62,8 +71,6 @@ stabl_en = clone(stabl).set_params(
     base_estimator=en,
     n_bootstraps=100,
     lambda_grid=[
-        {"C": np.logspace(-2, 1, 5), "l1_ratio": [0.5]},
-        {"C": np.logspace(-2, 1, 5), "l1_ratio": [0.7]},
         {"C": np.logspace(-2, 1, 5), "l1_ratio": [0.9]}
     ],
     verbose=1)
@@ -83,7 +90,7 @@ models = [
     "STABL ElasticNet", "ElasticNet"
 ]
 
-X_train, X_valid, y_train, y_valid, ids, task_type = data.load_covid_19("../Sample Data/COVID-19")
+X_train, X_valid, y_train, y_valid, ids, task_type = data.load_covid_19("./Sample Data/COVID-19")
 
 print("Run CV on covid 19 dataset")
 print(ids)
@@ -91,7 +98,6 @@ multi_omic_stabl_cv(
     data_dict=X_train,
     y=y_train,
     outer_splitter=outter_cv,
-    inner_splitter=chosen_inner_cv,
     estimators=estimators,
     task_type=task_type,
     save_path="./Benchmarks results/Results COVID-19",

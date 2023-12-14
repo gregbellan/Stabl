@@ -100,6 +100,5 @@ multi_omic_stabl_cv(
     early_fusion=True,
     models=models,
     late_fusion=True,
-    n_iter_lf=1000,
-    sgl_corr_percentile=[90, 95]
+    n_iter_lf=1000
 )
