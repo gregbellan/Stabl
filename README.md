@@ -1,3 +1,6 @@
+<img width="auto" alt="STABL" src="https://github.com/gregbellan/Stabl/assets/126295307/8fc2a289-d1ca-4d76-99c3-35c3ebece28e">
+
+
 # Stabl: sparse and reliable biomarker discovery in predictive modeling of high-dimensional omic data
 
 This is a scikit-learn compatible Python implementation of Stabl, coupled with useful functions and
