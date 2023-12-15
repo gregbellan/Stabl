@@ -34,7 +34,7 @@ interpretation and clinical translation of complex multi-omic predictive models.
 
 ### Requirements
 
-Python version : from 3.7 up to 3.10
+Python version : from 3.7 up to 3.12
 
 Python packages:
 
