@@ -12,13 +12,8 @@ np.random.seed(42)
 # Defining outer Cross-Validation (CV) loop and inner CV loop
 # The outer loop is used as the general evaluation framework whereas the inner loop is used to tune models at each fold
 
-# Full version
-# outter_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=20, random_state=42)
-# chosen_inner_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=5, random_state=42)
-
-# Rapid test version
-outter_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=2, random_state=42)
-chosen_inner_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=2, random_state=42)
+outter_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=20, random_state=42)
+chosen_inner_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=5, random_state=42)
 
 artificial_type = "knockoff"  # or "random_permutation"
 
