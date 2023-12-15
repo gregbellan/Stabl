@@ -1,6 +1,6 @@
 <img width="100%" alt="STABL" src="./front_page.png">
 
-# Stabl: sparse and reliable biomarker discovery in predictive modeling of high-dimensional omic data
+# Discovery of sparse, reliable omic biomarkers with Stabl
 [![DOI](https://img.shields.io/badge/DOI-doi:10.5061/dryad.stqjq2c7d-blue.svg)](https://doi.org/10.21203/rs.3.rs-2609859/v1)
 [![DOI](https://img.shields.io/badge/Python-3.7%E2%80%933.12-blue.svg)](https://github.com/gregbellan/Stabl)
 [![BSD 3-Clause Clear license](https://img.shields.io/badge/License-BSD%203%E2%80%93Clause-yellow.svg)](https://github.com/gregbellan/Stabl/blob/main/LICENSE)
@@ -19,16 +19,10 @@ This is a scikit-learn compatible Python implementation of Stabl, coupled with u
 example notebooks to rerun the analyses on the different use cases located in the `sample data` folder
 
 ## Abstract
-High-content omic technologies coupled with sparsity-promoting regularization methods (SRM) have transformed the
-biomarker discovery process. However, the translation of computational results into a clinical use-case scenario remains
-challenging. A rate-limiting step is the rigorous selection of reliable biomarker candidates among a host of biological
-features included in multivariable models. We propose Stabl, a general machine learning framework that unifies the
-biomarker discovery process with multivariable predictive modeling of clinical outcomes by selecting a sparse and 
-reliable set of biomarkers. Evaluation of Stabl on synthetic datasets and five independent clinical studies demonstrates
-improved biomarker sparsity and reliability compared to commonly used SRMs at similar predictive performance. Stabl 
-readily extends to double- and triple-omics integration tasks and identifies a sparser and more reliable set of 
-biomarkers than those selected by state-of-the-art early- and late-fusion SRMs, thereby facilitating the biological
-interpretation and clinical translation of complex multi-omic predictive models.
+Adoption of high-content omic technologies in clinical studies, coupled with computational methods, has yielded an abundance of candidate
+biomarkers. However, translating such fndings into bona fde clinical biomarkers remains challenging. To facilitate this process, we introduce
+Stabl, a general machine learning method that identifes a sparse, reliable set of biomarkers by integrating noise injection and a data-driven signal-to- noise threshold into multivariable predictive modeling. Evaluation of Stabl on synthetic datasets and fve independent clinical studies demonstrates improved biomarker sparsity and reliability compared to commonly used
+sparsity-promoting regularization methods while maintaining predictive performance; it distills datasets containing 1,400–35,000 features down to 4–34 candidate biomarkers. Stabl extends to multi-omic integration tasks, enabling biological interpretation of complex predictive models, as it hones in on a shortlist of proteomic, metabolomic and cytometric events predicting labor onset, microbial biomarkers of pre-term birth and a pre-operative immune signature of post-surgical infections. 
 
 ## Light-weight version
 
@@ -38,20 +32,19 @@ Python version : from 3.7 up to 3.12
 
 Python packages:
 
-* joblib == 1.1.0
-* tqdm == 4.64.0
-* matplotlib == 3.5.2
-* numpy == 1.23.1
-* cmake == 3.27.1
-* knockpy == 1.2
-* scikit-learn == 1.1.2
-* seaborn == 0.12.0
-* pandas == 1.4.2
+* joblib == 1.3.2
+* tqdm == 4.66.1
+* matplotlib == 3.8.2
+* numpy == 1.26.2
+* knockpy == 1.3.1
+* scikit-learn == 1.3.2
+* seaborn == 0.13.0
+* pandas == 2.1.4
 * statsmodels == 0.14.0
-* openpyxl == 3.0.7
+* openpyxl == 3.1.2
 * adjustText == 0.8
-* scipy == 1.10.1
-* osqp == 0.6.2
+* scipy == 1.11.4
+* osqp == 0.6.3
 
 ### Installation
 
@@ -67,7 +60,7 @@ pip install git+https://github.com/gregbellan/Stabl.git@v1.0.0-lw
     a. Download Stabl:
 
     ```
-    git clone https://github.com/gregbellan/Stabl.git@lw
+    git clone https://github.com/gregbellan/Stabl.git@stabl_lw
     ```
     b. Install requirements and Stabl:
 
