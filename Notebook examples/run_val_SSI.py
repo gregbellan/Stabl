@@ -12,7 +12,7 @@ outter_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=20, random_state=rando
 chosen_inner_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=5, random_state=42)
 
 artificial_type = "knockoff"
-X_train, X_valid, y_train, y_valid, ids, task_type = data.load_ssi("../Sample Data/Biobank SSI")
+X_train, X_valid, y_train, y_valid, ids, task_type = data.load_ssi("./Sample Data/Biobank SSI")
 
 # Lasso
 lasso = LogisticRegression(

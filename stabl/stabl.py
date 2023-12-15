@@ -655,6 +655,9 @@ def save_stabl_results(
     task_type: str, default="binary"
         Type of performed task.
         Choose "binary" for binary classification and "regression" for regression tasks or "multiclass"
+
+    override: bool, default=False
+        If True, this existing folder will be overwritten
     """
 
     check_is_fitted(stabl)
@@ -826,16 +829,7 @@ class Stabl(SelectorMixin, BaseEstimator):
         When the artificial_type is none, we fall back into the classic stability selection process.
 
     artificial_proportion: float, default=1.0
-        The proportion of artificial features to
-
-    pairwise: bool, default=False
-        If True, then the statistics become the difference of frequency of selection between a feature and its
-        counterpart.
-        Note that if `pairwise` is set to True, the `artificial_proportion` will be set to 1.0
-
-    pairwise_form: str, default="v1"
-        - If "v1": the computation of the FDP+ is using (FP+TP) as the denominator
-        - If "v2": the computation of the FDP+ is using (FP) as the denominator
+        The proportion of artificial features to generate.
 
     sample_fraction: float, default=0.5
         The fraction of samples to be used in each bootstrap sample.
@@ -895,7 +889,7 @@ class Stabl(SelectorMixin, BaseEstimator):
     n_features_in_: int
         Number of features seen during fit.
 
-    feature_names_in_: ndarray of shape (n_features_in_,)
+    feature_names_in_: ndarray of shape (n_features_in_, )
         Names of features seen during fit. Defined only when X has feature names that are all strings.
 
     stabl_scores_: array, shape(n_features, n_alphas)
@@ -938,8 +932,6 @@ class Stabl(SelectorMixin, BaseEstimator):
             n_bootstraps=1000,
             artificial_type="random_permutation",
             artificial_proportion=1.,
-            pairwise=False,
-            pairwise_form="v1",
             sample_fraction=0.5,
             replace=False,
             hard_threshold=None,
@@ -964,9 +956,7 @@ class Stabl(SelectorMixin, BaseEstimator):
         self._check_lambda_grid()
         self.n_bootstraps = n_bootstraps
         self.artificial_type = artificial_type
-        self.artificial_proportion = artificial_proportion if pairwise is False else 1.0
-        self.pairwise = pairwise
-        self.pairwise_form = pairwise_form
+        self.artificial_proportion = artificial_proportion
         self.sample_fraction = sample_fraction
         self.hard_threshold = hard_threshold
         self.fdr_threshold_range = fdr_threshold_range
@@ -1073,12 +1063,6 @@ class Stabl(SelectorMixin, BaseEstimator):
         if self.artificial_type is not None and not (0.0 < self.artificial_proportion <= 1.):
             raise ValueError(
                 f"When injecting noise, the noise proportion must be between 0 and 1, "
-                f"got {self.artificial_proportion}"
-            )
-
-        if self.pairwise is True and (0.0 < self.artificial_proportion < 1.):
-            raise ValueError(
-                f"When using pairwise exchangeability, the artificial proportion must be set to 1.0,"
                 f"got {self.artificial_proportion}"
             )
 
@@ -1223,9 +1207,6 @@ class Stabl(SelectorMixin, BaseEstimator):
                     selected_variables)[:, n_features:].mean(axis=0)
             self.stabl_scores_[:, idx] = np.vstack(selected_variables)[
                 :, :n_features].mean(axis=0)
-
-        if self.pairwise:
-            self.stabl_scores_ = self.stabl_scores_ - self.stabl_scores_artificial_[np.argsort(self.noise_group)]
 
         if self.artificial_type is not None:
             self._compute_FDPplus()
@@ -1448,44 +1429,22 @@ class Stabl(SelectorMixin, BaseEstimator):
         max_scores = np.max(self.stabl_scores_, axis=1)
         fdrs_table = np.zeros((self.stabl_scores_.shape[1], self.fdr_threshold_range.shape[0]))
 
-        if self.pairwise:
-            for idx, feat_score in enumerate(self.stabl_scores_):
-                max_score, min_score = np.max(feat_score), np.min(feat_score)
-                if abs(max_score) - abs(min_score) < 0:
-                    self.stabl_scores_[idx] = -abs(feat_score)
-                else:
-                    self.stabl_scores_[idx] = abs(feat_score)
+        for thresh in self.fdr_threshold_range:
+            num = np.sum((1 / artificial_proportion) *
+                         (max_scores_artificial > thresh)) + 1
+            denum = max([1, np.sum((max_scores > thresh))])
+            FDP = num / denum
+            FDPs.append(FDP)
 
-            max_scores = np.max(self.stabl_scores_, axis=1)
-            min_scores = np.min(self.stabl_scores_, axis=1)
-
-            for thresh in self.fdr_threshold_range:
-                thresh_neg = -thresh
-                FP = np.sum((min_scores < thresh_neg))
-                TP = np.sum((max_scores > thresh))
-                if self.pairwise_form == "v1":
-                    FDP = (FP + 1)/max([1, TP + FP])
-                else:
-                    FDP = (FP + 1)/max([1, TP])
-                FDPs.append(FDP)
-
-        else:
-            for thresh in self.fdr_threshold_range:
+        for i in np.arange(self.stabl_scores_.shape[1]):
+            for j, thresh in enumerate(self.fdr_threshold_range):
+                max_scores_artificial = self.stabl_scores_artificial_[:, i]
+                max_scores = self.stabl_scores_[:, i]
                 num = np.sum((1 / artificial_proportion) *
                              (max_scores_artificial > thresh)) + 1
                 denum = max([1, np.sum((max_scores > thresh))])
                 FDP = num / denum
-                FDPs.append(FDP)
-
-            for i in np.arange(self.stabl_scores_.shape[1]):
-                for j, thresh in enumerate(self.fdr_threshold_range):
-                    max_scores_artificial = self.stabl_scores_artificial_[:, i]
-                    max_scores = self.stabl_scores_[:, i]
-                    num = np.sum((1 / artificial_proportion) *
-                                 (max_scores_artificial > thresh)) + 1
-                    denum = max([1, np.sum((max_scores > thresh))])
-                    FDP = num / denum
-                    fdrs_table[i, j] = FDP
+                fdrs_table[i, j] = FDP
 
         self.fdrs_table = fdrs_table
         self.FDRs_ = FDPs
@@ -1494,8 +1453,7 @@ class Stabl(SelectorMixin, BaseEstimator):
         if self.min_fdr_ > 1.:
             final_cutoff = 1.
         else:
-            final_cutoff = np.min(
-                [self.fdr_threshold_range[np.argmin(self.FDRs_)], 1])
+            final_cutoff = np.min([self.fdr_threshold_range[np.argmin(self.FDRs_)], 1])
 
         self.fdr_min_threshold_ = final_cutoff
 

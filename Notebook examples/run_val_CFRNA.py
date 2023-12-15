@@ -82,7 +82,7 @@ models = [
     "ElasticNet",
 ]
 
-X_train, X_valid, y_train, y_valid, ids, task_type = data.load_cfrna("../Sample Data/CFRNA", percentile=None)
+X_train, X_valid, y_train, y_valid, ids, task_type = data.load_cfrna("./Sample Data/CFRNA", percentile=None)
 y_train = y_train.astype(int)
 
 print("Run Validation on CFRNA dataset")

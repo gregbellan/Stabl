@@ -73,7 +73,7 @@ models = [
     "ElasticNet",
 ]
 
-X_train, X_valid, y_train, y_valid, ids, task_type = data.load_onset_of_labor("../Sample Data/Onset of Labor")
+X_train, X_valid, y_train, y_valid, ids, task_type = data.load_onset_of_labor("./Sample Data/Onset of Labor")
 
 print("Run Validation on onset of labor dataset")
 multi_omic_stabl(

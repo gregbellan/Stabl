@@ -289,6 +289,7 @@ def boxplot_features(
                 x=y,
                 showfliers=False,
                 palette=cmap_palette,
+                hue=y,
                 boxprops=dict(alpha=.2),
                 whiskerprops=dict(alpha=.2),
                 width=.4

@@ -18,7 +18,7 @@ def stacked_multi_omic(df_predictions, y, task_type, n_iter=10000):
     Parameters
     ----------
     df_predictions: pd.DataFrame
-        pandas DataFrame containing all the predictions for each omic.
+        The DataFrame containing all the predictions for each omic.
 
     y: pd.Series
         pandas Series containing all the outcomes.
