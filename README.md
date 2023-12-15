@@ -1,12 +1,22 @@
-<img width="auto" alt="STABL" src="https://github.com/gregbellan/Stabl/assets/126295307/8fc2a289-d1ca-4d76-99c3-35c3ebece28e">
-
+<img width="100%" alt="STABL" src="./front_page.png">
 
 # Stabl: sparse and reliable biomarker discovery in predictive modeling of high-dimensional omic data
+[![DOI](https://img.shields.io/badge/DOI-doi:10.5061/dryad.stqjq2c7d-blue.svg)](https://doi.org/10.21203/rs.3.rs-2609859/v1)
+[![DOI](https://img.shields.io/badge/Python-3.7%E2%80%933.12-blue.svg)](https://github.com/gregbellan/Stabl)
+[![BSD 3-Clause Clear license](https://img.shields.io/badge/License-BSD%203%E2%80%93Clause-yellow.svg)](https://github.com/gregbellan/Stabl/blob/main/LICENSE)
+[![BSD 3-Clause Clear license](https://img.shields.io/badge/Open-Source-orange.svg)](https://github.com/gregbellan/Stabl/blob/main/LICENSE)
+
+
+[![Last full release](https://img.shields.io/badge/release-v1.0.0-blue.svg)](https://GitHub.com/gregbellan/Stabl/releases/)
+[![Last light-weight release](https://img.shields.io/badge/Light--weight%20release-v1.0.0--lw-blue.svg)](https://GitHub.com/gregbellan/Stabl/releases/)
+[![GitHub latest commit](https://badgen.net/github/last-commit/gregbellan/Stabl)](https://GitHub.com/gregbellan/Stabl/commit/)
+
+[![GitHub forks](https://img.shields.io/github/forks/gregbellan/Stabl.svg?style=social&label=Fork&maxAge=2592000)](https://GitHub.com/gregbellan/Stabl/network/)
+[![GitHub stars](https://img.shields.io/github/stars/gregbellan/Stabl.svg?style=social&label=Star&maxAge=2592000)](https://GitHub.com/gregbellan/Stabl/stargazers/)
+[![GitHub watchers](https://img.shields.io/github/watchers/gregbellan/Stabl.svg?style=social&label=Watch&maxAge=2592000)](https://GitHub.com/gregbellan/Stabl/watchers/)
 
 This is a scikit-learn compatible Python implementation of Stabl, coupled with useful functions and
 example notebooks to rerun the analyses on the different use cases located in the `sample data` folder
-
-[![DOI]](doi:10.5061/dryad.stqjq2c7d)
 
 ## Abstract
 High-content omic technologies coupled with sparsity-promoting regularization methods (SRM) have transformed the
@@ -20,7 +30,60 @@ readily extends to double- and triple-omics integration tasks and identifies a s
 biomarkers than those selected by state-of-the-art early- and late-fusion SRMs, thereby facilitating the biological
 interpretation and clinical translation of complex multi-omic predictive models.
 
-## Requirements
+## Light-weight version
+
+### Requirements
+
+Python version : from 3.7 up to 3.10
+
+Python packages:
+
+* joblib == 1.1.0
+* tqdm == 4.64.0
+* matplotlib == 3.5.2
+* numpy == 1.23.1
+* cmake == 3.27.1
+* knockpy == 1.2
+* scikit-learn == 1.1.2
+* seaborn == 0.12.0
+* pandas == 1.4.2
+* statsmodels == 0.14.0
+* openpyxl == 3.0.7
+* adjustText == 0.8
+* scipy == 1.10.1
+* osqp == 0.6.2
+
+### Installation
+
+In order to install the light-weight version of the library, you have two options:
+
+1. Install directly from github:
+
+```
+pip install git+https://github.com/gregbellan/Stabl.git@v1.0.0-lw
+```
+2. Clone the repository and install the library:
+
+    a. Download Stabl:
+
+    ```
+    git clone https://github.com/gregbellan/Stabl.git@lw
+    ```
+    b. Install requirements and Stabl:
+
+    ```
+    cd Stabl
+    pip install .
+    ```
+
+The general installation time is less than 10 seconds, and have been tested on mac OS and linux system.
+
+You may need to install CMake to fully use the library. Please refer to the section [CMake installation](#cmake-installation) in full version installation for more details.
+
+
+## Full version
+
+### Requirements
 
 Python version : from 3.7 up to 3.10
 
@@ -50,9 +113,9 @@ Julia package for noise generation (version 1.9.2) :
 * Distributions == 0.25.98
 * PyCall == 1.96.1
 
-## Installation
+### Installation
 
-### Julia installation
+#### Julia installation
 To install Julia, please follow these instructions: 
 
 1. Download Julia from [here](https://julialang.org/downloads/).
@@ -69,7 +132,7 @@ To install Julia, please follow these instructions:
     python -c "import julia; julia.install()"
     ``` 
 
-### CMake installation
+#### CMake installation
 
 In order to install the python libraries required to generate the noise, we need to install :
 * CMake (v3.27.4 for MacOS)
@@ -79,9 +142,9 @@ You can install this module by :
 * following instructions on [CMake](https://cmake.org/install/).
 
 
-### Python installation (>= 3.7 and < 3.11)
+#### Python installation (>= 3.7 and < 3.11)
 
-Install Directly from github:
+Install Directly from github (install latest release):
 
 ```
 pip install git+https://github.com/gregbellan/Stabl.git
@@ -132,7 +195,7 @@ unzip Sample\ Data/data.zip -d Sample\ Data/
 * `Tutorial Notebook.ipynb`: Tutorial on how to use the library
 * `run_cv_*.py`: Python scripts to run the sample datas in Cross-Validation
 * `run_val_*.py`: Python scripts to run the sample datas in Training-Validation
-* `run_synthetic_*.py`: Python scripts to run the synthetic benchmarks
+* `run_synthetic_*.py`: Python scripts to run the synthetic benchmarks. _Available only for the full version of the library._
 
 > **_NOTE:_** 
 > The different scripts may take some time to begin because of the dependence with julia. However, once started, the 
