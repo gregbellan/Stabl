@@ -66,7 +66,6 @@ def multi_omic_stabl_cv(
         data_dict,
         y,
         outer_splitter,
-        inner_splitter,
         estimators,
         task_type,
         save_path,
@@ -75,7 +74,6 @@ def multi_omic_stabl_cv(
         early_fusion=False,
         late_fusion=True,
         n_iter_lf=10000,
-        sgl_corr_percentile=[90]
 ):
     """
     Performs a cross validation on the data_dict using the models and saves the results in save_path.
@@ -91,9 +89,6 @@ def multi_omic_stabl_cv(
 
     outer_splitter: sklearn.model_selection._split.BaseCrossValidator
         Outer cross validation splitter
-
-    inner_splitter: sklearn.model_selection._split.BaseCrossValidator
-        Inner cross validation splitter
 
     estimators : dict[str, sklearn estimator]
         Dict of feature selectors to benchmark with their name as key. They must implement `fit`,
@@ -122,10 +117,6 @@ def multi_omic_stabl_cv(
         - "STABL ALasso" : Stabl with ALasso as base estimator
         - "ElasticNet" : ElasticNet
         - "STABL ElasticNet" : Stabl with ElasticNet as base estimator
-        - "SGL-90" : SGL with 0.90 as correlation threshold
-        - "STABL SGL-90" : Stabl with SGL with 0.90 as correlation threshold as base estimator
-        - "SGL-95" : SGL with 0.95 as correlation threshold
-        - "STABL SGL-95" : Stabl with SGL with 0.95 as correlation threshold as base estimator
 
     outer_groups: pd.Series, default=None
         If used, should be the same size as y and should indicate the groups of the samples.
@@ -139,29 +130,22 @@ def multi_omic_stabl_cv(
     n_iter_lf: int, default=10000
         Number of iterations for the late fusion.
 
-    sgl_corr_percentile: list of float, default=[90]
-        List of correlation threshold to use for SGL and STABL SGL.
 
     Returns
     -------
     predictions_dict: dict
         Dictionary containing the predictions of each model for each sample in Cross-Validation.
     """
-    if not isinstance(sgl_corr_percentile, list):
-        sgl_corr_percentile = [sgl_corr_percentile]
-
     if early_fusion:
         models += ["EF " + model for model in models if "STABL" not in model]
 
     lasso = estimators["lasso"]
     alasso = estimators["alasso"]
     en = estimators["en"]
-    sgl = estimators["sgl"]
 
     stabl = estimators["stabl_lasso"]
     stabl_alasso = estimators["stabl_alasso"]
     stabl_en = estimators["stabl_en"]
-    stabl_sgl = estimators["stabl_sgl"]
 
     os.makedirs(Path(save_path, "Training CV"), exist_ok=True)
     os.makedirs(Path(save_path, "Summary"), exist_ok=True)
@@ -285,28 +269,6 @@ def multi_omic_stabl_cv(
                         y=y_tmp,
                         task_type=task_type
                     )
-            for sgl_corr in sgl_corr_percentile:
-                if f"STABL SGL-{sgl_corr}" in models:
-                    # fit STABL SGL-0.5
-                    print(f"Fitting of STABL SGL-{sgl_corr}")
-                    stabl_sgl_corr = clone(stabl_sgl).set_params(perc_corr_group_threshold=sgl_corr)
-                    stabl_sgl_corr.fit(X_tmp_std, y_tmp, groups=groups)
-                    tmp_sel_features = list(stabl_sgl_corr.get_feature_names_out())
-                    fold_selected_features[f"STABL SGL-{sgl_corr}"].extend(tmp_sel_features)
-                    print(
-                        f"STABL SGL-{sgl_corr} finished on {omic_name} ({X_tmp.shape[0]} samples);"
-                        f" {len(tmp_sel_features)} features selected"
-                    )
-                    stabl_features_dict[f"STABL SGL-{sgl_corr}"][omic_name].loc[f'Fold n°{k}', "min FDP+"] = stabl_sgl_corr.min_fdr_
-                    stabl_features_dict[f"STABL SGL-{sgl_corr}"][omic_name].loc[f'Fold n°{k}', "Threshold"] = stabl_sgl_corr.fdr_min_threshold_
-                    if k == 1:
-                        save_stabl_results(
-                            stabl=stabl_sgl_corr,
-                            path=Path(save_path, "Training CV", f"STABL SGL-{sgl_corr} results on {omic_name}"),
-                            df_X=X_tmp_std,
-                            y=y_tmp,
-                            task_type=task_type
-                        )
 
             if "Lasso" in models:
                 # __Lasso__
@@ -355,25 +317,6 @@ def multi_omic_stabl_cv(
                     f" {len(tmp_sel_features)} features selected"
                 )
                 predictions_dict_late_fusion["ElasticNet"][omic_name].loc[test_idx_tmp, f"Fold n°{k}"] = predictions
-
-            for sgl_corr in sgl_corr_percentile:
-                if f"SGL-{sgl_corr}" in models:
-                    # __SGL-0.5__
-                    print(f"Fitting of SGL-{sgl_corr}")
-                    model = clone(sgl)
-                    groups_sgl = _make_groups(X_tmp_std, sgl_corr)
-                    setattr(model.estimator, "groups", groups_sgl)
-                    if task_type == "binary":
-                        predictions = model.fit(X_tmp_std, y_tmp, groups=groups).predict_proba(X_test_tmp_std)[:, 1]
-                    else:
-                        predictions = model.fit(X_tmp_std, y_tmp, groups=groups).predict(X_test_tmp_std)
-                    tmp_sel_features = list(X_tmp_std.columns[np.where(model.best_estimator_.coef_.flatten())])
-                    fold_selected_features[f"SGL-{sgl_corr}"].extend(tmp_sel_features)
-                    print(
-                        f"SGL-{sgl_corr} finished on {omic_name} ({X_tmp_std.shape[0]} samples);"
-                        f" {len(tmp_sel_features)} features selected"
-                    )
-                    predictions_dict_late_fusion[f"SGL-{sgl_corr}"][omic_name].loc[test_idx_tmp, f"Fold n°{k}"] = predictions
 
         for model in filter(lambda x: "STABL" in x, models):
             X_train = X_tot.loc[train_idx, fold_selected_features[model]]
@@ -424,7 +367,8 @@ def multi_omic_stabl_cv(
         # __late fusion__
         if late_fusion:
             preds_lf = late_fusion_cv(
-                predictions_dict_late_fusion, y[test_idx], task_type, Path(save_path, "Training CV"), n_iter=n_iter_lf
+                predictions_dict_late_fusion, y[test_idx], task_type,
+                Path(save_path, "Training CV"), n_iter=n_iter_lf
             )
             for model in preds_lf:
                 predictions_dict[model].loc[test_idx, f'Fold n°{k}'] = preds_lf[model]
@@ -494,25 +438,6 @@ def multi_omic_stabl_cv(
                     f" {len(tmp_sel_features)} features selected"
                 )
                 predictions_dict["EF ElasticNet"].loc[test_idx, f"Fold n°{k}"] = predictions
-
-            for sgl_corr in sgl_corr_percentile:
-                if f"EF SGL-{sgl_corr}" in models:
-                    # __SGL-0.5__
-                    print(f"Fitting of EF SGL-{sgl_corr}")
-                    model = clone(sgl)
-                    groups_sgl = _make_groups(X_train_std, sgl_corr)
-                    setattr(model.estimator, "groups", groups_sgl)
-                    if task_type == "binary":
-                        predictions = model.fit(X_train_std, y_train, groups=groups).predict_proba(X_test_std)[:, 1]
-                    else:
-                        predictions = model.fit(X_train_std, y_train, groups=groups).predict(X_test_std)
-                    tmp_sel_features = list(X_train_std.columns[np.where(model.best_estimator_.coef_.flatten())])
-                    fold_selected_features[f"EF SGL-{sgl_corr}"] = tmp_sel_features
-                    print(
-                        f"EF SGL-{sgl_corr} finished on {omic_name} ({X_train_std.shape[0]} samples);"
-                        f" {len(tmp_sel_features)} features selected"
-                    )
-                    predictions_dict[f"EF SGL-{sgl_corr}"].loc[test_idx, f"Fold n°{k}"] = predictions
 
         print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
         for model in models:
@@ -587,7 +512,6 @@ def multi_omic_stabl_cv(
 def multi_omic_stabl(
         data_dict,
         y,
-        splitter,
         estimators,
         task_type,
         save_path,
@@ -597,8 +521,7 @@ def multi_omic_stabl(
         early_fusion=False,
         X_test=None,
         y_test=None,
-        n_iter_lf=10000,
-        sgl_corr_percentile=[90]
+        n_iter_lf=10000
 ):
     """
     Performs a cross validation on the data_dict using the models and saves the results in save_path.
@@ -611,9 +534,6 @@ def multi_omic_stabl(
     y: pd.Series
         pandas Series containing the outcomes for the use case. Note that y should contains the union of outcomes for
         the data_dict.
-
-    splitter: sklearn.model_selection._split.BaseCrossValidator
-        Cross validation splitter
 
     estimators : dict[str, sklearn estimator]
         Dict of feature selectors to benchmark with their name as key. They must implement `fit`, `get_support(indices=True)`. It should contain :
@@ -660,17 +580,14 @@ def multi_omic_stabl(
     early_fusion: bool, default=False
         If True, it will perform early fusion for each estimator.
 
-    X_test: dict, default=None
+    X_test: dict or None, default=None
         Dictionary containing the test omic-files.
 
-    y_test: pd.Series, default=None
+    y_test: pd.Series or None, default=None
         pandas Series containing the outcomes for the use case. Note that y should contains the union of outcomes for X_test.
 
     n_iter_lf: int, default=10000
         Number of iterations for the late fusion.
-
-    sgl_corr_percentile: list of float, default=[90]
-        List of correlation threshold to use for SGL and STABL SGL.
 
     Returns
     -------
@@ -678,8 +595,6 @@ def multi_omic_stabl(
         Dictionary containing the predictions of each model for each sample of X_test.
     """
 
-    if not isinstance(sgl_corr_percentile, list):
-        sgl_corr_percentile = [sgl_corr_percentile]
     if stabl_params is None:
         stabl_params = {}
 
@@ -689,12 +604,10 @@ def multi_omic_stabl(
     lasso = estimators["lasso"]
     alasso = estimators["alasso"]
     en = estimators["en"]
-    sgl = estimators["sgl"]
 
     stabl = estimators["stabl_lasso"]
     stabl_alasso = estimators["stabl_alasso"]
     stabl_en = estimators["stabl_en"]
-    stabl_sgl = estimators["stabl_sgl"]
 
     os.makedirs(Path(save_path, "Training-Validation"), exist_ok=True)
     os.makedirs(Path(save_path, "Summary"), exist_ok=True)
@@ -803,28 +716,6 @@ def multi_omic_stabl(
                 task_type=task_type
             )
 
-        for sgl_corr in sgl_corr_percentile:
-            if f"STABL SGL-{sgl_corr}" in models:
-                # fit STABL SGL-0.5
-                print(f"Fitting of STABL SGL-{sgl_corr} on {omic_name}")
-                if f"STABL SGL-{sgl_corr}" in stabl_params and omic_name in stabl_params[f"STABL SGL-{sgl_corr}"]:
-                    stabl_sgl.set_params(lambda_grid=stabl_params[f"STABL SGL-{sgl_corr}"][omic_name])
-                stabl_sgl_corr = clone(stabl_sgl).set_params(perc_corr_group_threshold=sgl_corr)
-                stabl_sgl_corr.fit(X_omic_std, y_omic, groups=groups)
-                tmp_sel_features = list(stabl_sgl_corr.get_feature_names_out())
-                selected_features_dict[f"STABL SGL-{sgl_corr}"].extend(tmp_sel_features)
-                print(
-                    f"STABL SGL-{sgl_corr} finished on {omic_name} ({X_omic_std.shape[0]} samples);"
-                    f" {len(tmp_sel_features)} features selected"
-                )
-                save_stabl_results(
-                    stabl=stabl_sgl_corr,
-                    path=Path(save_path, "Training-Validation", f"STABL SGL-{sgl_corr} results on {omic_name}"),
-                    df_X=X_omic,
-                    y=y_omic,
-                    task_type=task_type
-                )
-
         if "Lasso" in models:
             # __Lasso__
             print(f"Fitting of Lasso on {omic_name}")
@@ -931,7 +822,9 @@ def multi_omic_stabl(
                  "Associated weight": model.coef_.flatten()[np.where(model.coef_.flatten())]
                  }
             ).set_index("Feature")
-            base_linear_model_coef.to_csv(Path(save_path, "Training-Validation", f"ElasticNet coefficients {omic_name}.csv"))
+            base_linear_model_coef.to_csv(
+                Path(save_path, "Training-Validation", f"ElasticNet coefficients {omic_name}.csv")
+            )
 
             predictions_dict_train_late_fusion["ElasticNet"].loc[X_omic.index, omic_name] = predictions
             if X_test is not None:
@@ -940,51 +833,9 @@ def multi_omic_stabl(
                 else:
                     predictions = model.predict(X_test_omic_std)
                 predictions_dict_test_late_fusion["ElasticNet"].loc[X_test_omic_std.index, omic_name] = predictions
-                predictions_dict_test_late_fusion["ElasticNet"].fillna(np.median(predictions_dict_train_late_fusion["ElasticNet"]), inplace=True)
-
-        for sgl_corr in sgl_corr_percentile:
-            if f"SGL-{sgl_corr}" in models:
-                # __SGL-0.5__
-                print(f"Fitting of SGL-{sgl_corr} on {omic_name}")
-                model = clone(sgl)
-
-                groups_sgl = _make_groups(X_omic_std, sgl_corr)
-                setattr(model.estimator, "groups", groups_sgl)
-
-                try:
-                    model = model.fit(X_omic_std, y_omic, groups=groups)
-                except:
-                    model = model.fit(X_omic_std, y_omic)
-
-                model = model.best_estimator_
-
-                if task_type == "binary":
-                    predictions = model.predict_proba(X_omic_std)[:, 1]
-                else:
-                    predictions = model.predict(X_omic_std)
-
-                tmp_sel_features = list(X_omic_std.columns[np.where(model.coef_.flatten())])
-                selected_features_dict[f"SGL-{sgl_corr}"].extend(tmp_sel_features)
-                print(
-                    f"SGL-{sgl_corr} finished on {omic_name} ({X_omic_std.shape[0]} samples);"
-                    f" {len(tmp_sel_features)} features selected"
+                predictions_dict_test_late_fusion["ElasticNet"].fillna(
+                    np.median(predictions_dict_train_late_fusion["ElasticNet"]), inplace=True
                 )
-
-                base_linear_model_coef = pd.DataFrame(
-                    {"Feature": tmp_sel_features,
-                     "Associated weight": model.coef_.flatten()[np.where(model.coef_.flatten())]
-                     }
-                ).set_index("Feature")
-                base_linear_model_coef.to_csv(Path(save_path, "Training-Validation", f"SGL-{sgl_corr} coefficients {omic_name}.csv"))
-
-                predictions_dict_train_late_fusion[f"SGL-{sgl_corr}"].loc[X_omic.index, omic_name] = predictions
-                if X_test is not None:
-                    if task_type == "binary":
-                        predictions = model.predict_proba(X_test_omic_std)[:, 1]
-                    else:
-                        predictions = model.predict(X_test_omic_std)
-                    predictions_dict_test_late_fusion[f"SGL-{sgl_corr}"].loc[X_test_omic_std.index, omic_name] = predictions
-                    predictions_dict_test_late_fusion[f"SGL-{sgl_corr}"].fillna(np.median(predictions_dict_train_late_fusion[f"SGL-{sgl_corr}"]), inplace=True)
 
     final_prepro = Pipeline(
         steps=[("impute", SimpleImputer(strategy="median")), ("std", StandardScaler())]
@@ -1038,7 +889,10 @@ def multi_omic_stabl(
             )
 
     # __late fusion__
-    preds_lf = late_fusion_validation(predictions_dict_train_late_fusion, predictions_dict_test_late_fusion, y, task_type, Path(save_path, "Training-Validation"), n_iter=n_iter_lf)
+    preds_lf = late_fusion_validation(
+        predictions_dict_train_late_fusion, predictions_dict_test_late_fusion, y,
+        task_type, Path(save_path, "Training-Validation"), n_iter=n_iter_lf
+    )
     if preds_lf is not None:
         for model in preds_lf:
             predictions_dict[model] = preds_lf[model]
@@ -1156,41 +1010,6 @@ def multi_omic_stabl(
                     index=y_test.index,
                     name=f"EF ElasticNet predictions"
                 )
-        for sgl_corr in sgl_corr_percentile:
-            if f"EF SGL-{sgl_corr}" in models:
-                # __SGL-0.5__
-                print(f"Fitting of EF SGL-{sgl_corr}")
-                model = clone(sgl)
-                groups_sgl = _make_groups(X_train_std, sgl_corr)
-                setattr(model.estimator, "groups", groups_sgl)
-                try:
-                    model.fit(X_train_std, y, groups=groups)
-                except:
-                    model.fit(X_train_std, y)
-                tmp_sel_features = list(X_train_std.columns[np.where(model.best_estimator_.coef_.flatten())])
-                selected_features_dict[f"EF SGL-{sgl_corr}"] = tmp_sel_features
-
-                model_coef = pd.DataFrame(
-                    {"Feature": selected_features_dict[f"EF SGL-{sgl_corr}"],
-                     "Associated weight": model.best_estimator_.coef_.flatten()[np.where(model.best_estimator_.coef_.flatten())]
-                     }
-                ).set_index("Feature")
-                model_coef.to_csv(Path(save_path, "Training-Validation", f"EF SGL-{sgl_corr} coefficients.csv"))
-
-                print(
-                    f"EF SGL-{sgl_corr} finished on {omic_name} ({X_train_std.shape[0]} samples);"
-                    f" {len(tmp_sel_features)} features selected"
-                )
-                if X_test is not None:
-                    if task_type == "binary":
-                        predictions = model.predict_proba(X_test_std)[:, 1]
-                    else:
-                        predictions = model.predict(X_test_std)
-                    predictions_dict[f"EF SGL-{sgl_corr}"] = pd.Series(
-                        predictions,
-                        index=y_test.index,
-                        name=f"EF SGL-{sgl_corr} predictions"
-                    )
 
     print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
     for model in models:
@@ -1327,7 +1146,8 @@ def late_fusion_validation(
             Path(model_lf_path, f"Stacked Generalization predictions train {model_name}.csv"))
         if predictions_valid_dict:
             valid_preds = predictions_valid_dict[model_name]
-            final_predictions_dict[model_name] = (valid_preds * weights["Associated weight"]).sum(axis=1) / weights["Associated weight"].sum()
+            final_predictions_dict[model_name] = ((valid_preds * weights["Associated weight"]).sum(axis=1) /
+                                                  weights["Associated weight"].sum())
     if predictions_valid_dict:
         return final_predictions_dict
     else:

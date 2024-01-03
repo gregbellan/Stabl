@@ -18,7 +18,7 @@ def stacked_multi_omic(df_predictions, y, task_type, n_iter=10000):
     Parameters
     ----------
     df_predictions: pd.DataFrame
-        pandas DataFrame containing all the predictions for each omic.
+        The DataFrame containing all the predictions for each omic.
 
     y: pd.Series
         pandas Series containing all the outcomes.
@@ -59,6 +59,10 @@ def stacked_multi_omic(df_predictions, y, task_type, n_iter=10000):
                 score = r2_score(y, weighted_probs)
             except:
                 continue
+
+        else:
+            raise ValueError("task_type not recognized")
+
         if score > best_score:
             best_probs = weighted_probs
             best_score = score

@@ -1,8 +1,3 @@
-import warnings
-import scipy as sp
-import os
-from copy import copy
-from itertools import cycle
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -10,11 +5,8 @@ import matplotlib
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from matplotlib.lines import Line2D
 import matplotlib.patches as mpatches
-from matplotlib.legend_handler import HandlerTuple
 from scipy.stats import mannwhitneyu, pearsonr
-from sklearn import metrics
 from sklearn.metrics import roc_curve, r2_score, mean_squared_error, roc_auc_score, auc, \
     precision_recall_curve, mean_absolute_error
 from sklearn.model_selection import cross_val_predict, LeaveOneOut, StratifiedKFold
@@ -35,7 +27,7 @@ def plot_roc(
         show_CI=True,
         CI_level=0.95,
         export_file=False,
-        paths='./ROC Curve.pdf',
+        path='./ROC Curve.pdf',
         **kwargs
 ):
     """
@@ -62,21 +54,24 @@ def plot_roc(
         If set to True, the ROC curve will be exported using the path provided
         by the user.
 
-    paths: str or Path or list of Path, default='./ROC curve.pdf'
+    path: str or Path, default='./ROC curve.pdf'
         The path indicating were we want to save the figure. 
         Should also include the name of the file and the extension.
 
     **kwargs: additional parameters for the plot function
     """
+    if not isinstance(y_true, pd.Series):
+        y_true = pd.Series(y_true, name="outcomes")
 
-    if not isinstance(paths, list):
-        paths = [paths]
+    if not isinstance(y_preds, pd.Series):
+        y_preds = pd.Series(y_preds, name="predictions")
 
     fig, ax = plt.subplots(1, 1, **kwargs)
 
     fpr, tpr, thresholds = roc_curve(y_true, y_preds)
     roc_auc = auc(fpr, tpr)
 
+    # Computing the confidence interval
     df_CI, CI = compute_CI(
         y_true=y_true,
         y_preds=y_preds,
@@ -100,17 +95,13 @@ def plot_roc(
         color='#C41E3A',
         label=f"ROC (AUC = {roc_auc:.3f} [{CI[0]:.3f}, {CI[1]:.3f}])"
     )
-    ax.plot([0, 1], [0, 1], linestyle='--', lw=1.5,
-            color='#4D4F53', alpha=.8, label="Chance")
+    ax.plot([0, 1], [0, 1], linestyle='--', lw=1.5, color='#4D4F53', alpha=.8, label="Chance")
 
     make_beautiful_axis(ax)
-    lgd = plt.legend(bbox_to_anchor=(0, 1.02, 1, 0.2),
-                     loc="lower center", fontsize=8)
+    lgd = plt.legend(bbox_to_anchor=(0, 1.02, 1, 0.2), loc="lower center", fontsize=8)
 
     if export_file:
-        for path in paths:
-            fig.savefig(path, dpi=95, bbox_extra_artists=(
-                lgd,), bbox_inches='tight')
+        fig.savefig(path, dpi=95, bbox_extra_artists=(lgd,), bbox_inches='tight')
 
     if not show_fig:
         plt.close()
@@ -130,7 +121,7 @@ def plot_prc(
         **kwargs
 ):
     """
-    Function to draw the PR curve from probabilities.
+    Function to draw the Precision-Recall curve from predicted probabilities and corresponding true outcomes.
 
     Parameters
     ----------
@@ -164,9 +155,17 @@ def plot_prc(
     """
     fig, ax = plt.subplots(1, 1, **kwargs)
 
+    if not isinstance(y_true, pd.Series):
+        y_true = pd.Series(y_true, name="outcomes")
+
+    if not isinstance(y_preds, pd.Series):
+        y_preds = pd.Series(y_preds, name="predictions")
+
+    # Computing the AUPRC
     precision, recall, thresholds = precision_recall_curve(y_true, y_preds)
     prc_auc = auc(recall, precision)
 
+    # Computing the Confidence Interval
     df_CI, CI = compute_CI(
         y_true=y_true,
         y_preds=y_preds,
@@ -179,19 +178,11 @@ def plot_prc(
         add_iso_lines(ax)
 
     if show_CI:
-        precision_low, recall_low, _ = precision_recall_curve(
-            df_CI.target_low,
-            df_CI.preds_low
-        )
-        ax.plot(recall_low, precision_low, lw=2,
-                ls=":", alpha=.8, color='#e3819d')
+        precision_low, recall_low, _ = precision_recall_curve(df_CI.target_low, df_CI.preds_low)
+        ax.plot(recall_low, precision_low, lw=2, ls=":", alpha=.8, color='#e3819d')
 
-        precision_up, recall_up, _ = precision_recall_curve(
-            df_CI.target_up,
-            df_CI.preds_up
-        )
-        ax.plot(recall_up, precision_up, lw=2,
-                ls=":", alpha=.8, color='#e3819d')
+        precision_up, recall_up, _ = precision_recall_curve(df_CI.target_up, df_CI.preds_up)
+        ax.plot(recall_up, precision_up, lw=2, ls=":", alpha=.8, color='#e3819d')
 
     ax.plot(
         recall,
@@ -199,16 +190,15 @@ def plot_prc(
         lw=2,
         alpha=1,
         color='#C41E3A',
-        label=f"PR (AUC = {prc_auc:.3f} [{CI[0]:.3f}, {CI[1]:.3f}])"
+        label=f"AUPRC={prc_auc:.2f} [{CI[0]:.2f}, {CI[1]:.2f}]"
     )
 
-    ax = make_beautiful_axis(ax, plot_type="prc")
-    lgd = plt.legend(bbox_to_anchor=(0, 1.02, 1, 0.2),
-                     loc="lower center", fontsize=8)
+    ax = make_beautiful_axis(ax, plot_type="prc")  # Make beautiful axes for this plot
+
+    lgd = plt.legend(bbox_to_anchor=(0, 1.02, 1, 0.2), loc="lower center", fontsize=8)
 
     if export_file:
-        fig.savefig(path, dpi=95, bbox_extra_artists=(
-            lgd,), bbox_inches='tight')
+        fig.savefig(path, dpi=95, bbox_extra_artists=(lgd,), bbox_inches='tight')
 
     if not show_fig:
         plt.close()
@@ -216,32 +206,8 @@ def plot_prc(
     return fig, ax
 
 
-def _is_categorical(df, feature, categorical_features):
-    """Determine if a feature is categorical or not.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        dataframe containing the feature.
-    feature : str
-        feature to check.
-    categorical_features : list of str or int
-        list of categorical features or the maximum number of unique values for a feature to be considered categorical.
-
-    Returns
-    -------
-    bool
-        Whether the feature is categorical or not.
-    """
-    if isinstance(categorical_features, list) and feature in categorical_features:
-        return True
-    if isinstance(categorical_features, int) and df[feature].nunique() <= categorical_features:
-        return True
-    return False
-
-
 def boxplot_features(
-        list_of_features,
+        features,
         df_X,
         y,
         categorical_features=10,
@@ -252,12 +218,12 @@ def boxplot_features(
         path='./',
         fmt='pdf'
 ):
-    """Function to boxplot of the features indicated in a list
+    """Function to draw the boxplot of the features indicated in the `features` list
     given by the user.
 
     Parameters
     ----------
-    list_of_features: list of str
+    features: list of str
         List of features we want to represent.
         Should be a list of str, each str being a feature name
 
@@ -294,7 +260,7 @@ def boxplot_features(
     """
     palette = ["#4D4F53", "#C41E3A"]
 
-    for feature in list_of_features:
+    for feature in features:
 
         if _is_categorical(df_X, feature, categorical_features):
             fig, ax = plt.subplots(1, 1, figsize=(10, 5))
@@ -323,6 +289,7 @@ def boxplot_features(
                 x=y,
                 showfliers=False,
                 palette=cmap_palette,
+                hue=y,
                 boxprops=dict(alpha=.2),
                 whiskerprops=dict(alpha=.2),
                 width=.4
@@ -363,7 +330,7 @@ def boxplot_features(
 
 
 def scatterplot_features(
-        list_of_features,
+        features,
         df_X,
         y,
         categorical_features=10,
@@ -379,38 +346,38 @@ def scatterplot_features(
 
     Parameters
     ----------
-    list_of_features: list of string or int
-        The list of features we want to represent the scatter plot for regression
+    features : list of string or int
+        The list of `features` for which we want to represent the scatter plot
 
     df_X : pd.DataFrame
         The input DataFrame (not preprocessed)
 
-    y: Series
+    y : Series
         y used in the fit. Should be a Series to get the name of the outcome.
 
-    categorical_features: list of str or int, default=None
+    categorical_features : list of str or int, default=None
         List of the features that are categorical or upper bound number of unique values to be considered as categorical
         If None, no features are categorical.
 
-    cmap: str, default='viridis'
+    cmap : str, default='viridis'
         The name of the colormap to use.
 
     show_fig : bool, default=True
         Whether to display the figure
 
-    export_file: bool, default=False
+    export_file : bool, default=False
         If set to True, it will export the plot using the path and the format.
         The names of the different file are generated automatically with the name
         of the features.
 
-    path: str or Path, default='./'
+    path : str or Path, default='./'
         path to the directory. Should not contain the name of the file and the
         extension
 
-    fmt: str, default='pdf'
+    fmt : str, default='pdf'
         Format of the export. Should be string
     """
-    for col in list_of_features:
+    for col in features:
         fig, ax = plt.subplots(1, 1, figsize=(5.5, 3.5))
 
         if _is_categorical(df_X, col, categorical_features):
@@ -469,7 +436,7 @@ def boxplot_binary_predictions(
         y_preds,
         show_fig=True,
         export_file=False,
-        paths='./Boxplot of predictions.pdf',
+        path='./Boxplot of predictions.pdf',
         figsize=(5.5, 3.5),
         classes=None,
         **kwargs
@@ -496,15 +463,24 @@ def boxplot_binary_predictions(
         The names of the different file are generated automatically with the name
         of the features. 
 
-    paths: str or Path or list of Path, default='./Boxplot of predictions.pdf'
+    path: str or Path, default='./Boxplot of predictions.pdf'
         Path to the directory. Should also contain the name of the file and the
         extension (format)
 
     **kwargs: arguments
         Further arguments to pass to the subplots function
     """
-    if not isinstance(paths, list):
-        paths = [paths]
+    if isinstance(y_true, pd.Series):
+        y_axis_title = y_true.name
+        y_true = np.array(y_true)
+    else:
+        y_axis_title = "True Label"
+
+    if isinstance(y_preds, pd.Series):
+        x_axis_title = y_preds.name
+        y_preds = np.array(y_preds)
+    else:
+        x_axis_title = "Predictions"
 
     fig, ax = plt.subplots(1, 1, figsize=figsize)
     palette = ["#4D4F53", "#C41E3A"]
@@ -525,7 +501,6 @@ def boxplot_binary_predictions(
     if classes is not None:
         ax.set_yticklabels(labels=classes)
 
-    # utest = mannwhitneyu(y_preds[y_true == 0], y_preds[y_true == 1])
     roc_auc = roc_auc_score(y_true, y_preds)
     auc_ci_lo, auc_ci_up = compute_CI(y_true, y_preds, scoring="roc_auc")
     precision, recall, _ = precision_recall_curve(y_true, y_preds)
@@ -533,18 +508,18 @@ def boxplot_binary_predictions(
     pr_ci_lo, pr_ci_up = compute_CI(y_true, y_preds, scoring="prc_auc")
 
     plt.title(
-        # fr"$\bf{{Mannwhitney}}$ pvalue={utest.pvalue:.2e}" + '\n'
-        fr"$\bf{{ROC}}$={roc_auc:.2f} [{auc_ci_lo:.2f}, {auc_ci_up:.2f}]" + '\n'
-        fr"$\bf{{Prec.Recall}}$={pr_auc:.2f} [{pr_ci_lo:.2f}, {pr_ci_up:.2f}]",
+        fr"$\bf{{AUROC}}$={roc_auc:.2f} [{auc_ci_lo:.2f}, {auc_ci_up:.2f}]" + '\n'
+        fr"$\bf{{AUPRC}}$={pr_auc:.2f} [{pr_ci_lo:.2f}, {pr_ci_up:.2f}]",
         fontsize=10
     )
+    plt.xlabel(x_axis_title)
+    plt.ylabel(y_axis_title)
 
     make_beautiful_axis(ax, plot_type="boxplot", gridline_axis="x")
 
     plt.tight_layout()
     if export_file:
-        for path in paths:
-            fig.savefig(path, dpi=95, bbox_inches="tight")
+        fig.savefig(path, dpi=95, bbox_inches="tight")
 
     if not show_fig:
         plt.close()
@@ -761,3 +736,27 @@ def add_iso_lines(ax, iso_number=4):
                 alpha=0.2, lw=1, zorder=0)
         ax.annotate("f1={0:0.1f}".format(f_score),
                     xy=(y[45] + 0.02, 1.02), fontsize=7)
+
+
+def _is_categorical(df, feature, categorical_features):
+    """Determine if a feature is categorical or not.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The dataframe containing the feature.
+    feature : str
+        feature to check.
+    categorical_features : list of str or int
+        list of categorical features or the maximum number of unique values for a feature to be considered categorical.
+
+    Returns
+    -------
+    bool
+        Whether the feature is categorical or not.
+    """
+    if isinstance(categorical_features, list) and feature in categorical_features:
+        return True
+    if isinstance(categorical_features, int) and df[feature].nunique() <= categorical_features:
+        return True
+    return False

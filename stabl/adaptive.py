@@ -3,7 +3,8 @@ from sklearn.linear_model import Lasso, LogisticRegression
 
 
 class ALasso(Lasso):
-    """Implementation of the adaptive lasso algorithm (ALasso). It is a Lasso with weights that are updated at each iteration.
+    """Implementation of the adaptive lasso algorithm (ALasso).
+    This weighted Lasso updated weights iteratively.
     The implementation structure is inspired by the sklearn implementation of the Lasso algorithm.
 
     Parameters
@@ -77,6 +78,7 @@ class ALasso(Lasso):
         random_state=None,
         selection="cyclic",
     ):
+        self.coef_ = None
         self.n_iter_lasso = n_iter_lasso
         super().__init__(
             alpha=alpha,
@@ -92,7 +94,7 @@ class ALasso(Lasso):
 
         )
 
-    def fit(self, X, y):
+    def fit(self, X, y, **kwargs):
         """
         Fit model with coordinate descent.
 
@@ -110,8 +112,7 @@ class ALasso(Lasso):
             X_w = X / weights
             super().fit(X_w, y)
             self.coef_ = self.coef_ / weights
-            weights = 1. / \
-                (2. * np.sqrt(np.abs(self.coef_)) + np.finfo(float).eps)
+            weights = 1. / (2. * np.sqrt(np.abs(self.coef_)) + np.finfo(float).eps)
         return self
 
 
@@ -131,7 +132,7 @@ class ALogitLasso(LogisticRegression):
         Specify the norm of the penalty:
 
         - `None`: no penalty is added;
-        - `'l2'`: add a L2 penalty term and it is the default choice;
+        - `'l2'`: add a L2 penalty term, and it is the default choice;
         - `'l1'`: add a L1 penalty term;
         - `'elasticnet'`: both L1 and L2 penalty terms are added.
 
@@ -269,6 +270,7 @@ class ALogitLasso(LogisticRegression):
         n_jobs=None,
         l1_ratio=None,
     ):
+        self.coef_ = None
         self.n_iter_lasso = n_iter_lasso
         super().__init__(
             penalty=penalty,
@@ -288,7 +290,7 @@ class ALogitLasso(LogisticRegression):
             l1_ratio=l1_ratio
         )
 
-    def fit(self, X, y):
+    def fit(self, X, y, **kwargs):
         """
         Fit the model according to the given training data.
 
@@ -298,9 +300,6 @@ class ALogitLasso(LogisticRegression):
             Data
         y : array-like of shape (n_samples,) or (n_samples, n_targets)
             Target. Will be cast to X's dtype if necessary
-        norm_order : non-zero int, inf, -inf, default=1
-            Order of the norm used to normalize the coef to calculate the weights in the case
-            where the ``coef_`` attribute of the estimator is of dimension 2.
         """
         n_features = X.shape[1]
         weights = np.ones(n_features)
