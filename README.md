@@ -1,8 +1,8 @@
 <img width="100%" alt="STABL" src="./front_page.png">
 
 # Discovery of sparse, reliable omic biomarkers with Stabl
-[![DOI](https://img.shields.io/badge/DOI-doi:10.5061/dryad.stqjq2c7d-blue.svg)](https://doi.org/10.21203/rs.3.rs-2609859/v1)
-[![DOI](https://img.shields.io/badge/Python-3.7%E2%80%933.12-blue.svg)](https://github.com/gregbellan/Stabl)
+[![DOI](https://img.shields.io/badge/DOI-doi:10.1038/s41587--023--02033--x-blue.svg)](https://doi.org/10.1038/s41587-023-02033-x)
+[![Python version](https://img.shields.io/badge/Python-3.7%E2%80%933.12-blue.svg)](https://github.com/gregbellan/Stabl)
 [![BSD 3-Clause Clear license](https://img.shields.io/badge/License-BSD%203%E2%80%93Clause-yellow.svg)](https://github.com/gregbellan/Stabl/blob/main/LICENSE)
 [![BSD 3-Clause Clear license](https://img.shields.io/badge/Open-Source-orange.svg)](https://github.com/gregbellan/Stabl/blob/main/LICENSE)
 
@@ -18,11 +18,22 @@
 This is a scikit-learn compatible Python implementation of Stabl, coupled with useful functions and
 example notebooks to rerun the analyses on the different use cases located in the `sample data` folder
 
+
 ## Abstract
 Adoption of high-content omic technologies in clinical studies, coupled with computational methods, has yielded an abundance of candidate
 biomarkers. However, translating such fndings into bona fde clinical biomarkers remains challenging. To facilitate this process, we introduce
 Stabl, a general machine learning method that identifes a sparse, reliable set of biomarkers by integrating noise injection and a data-driven signal-to- noise threshold into multivariable predictive modeling. Evaluation of Stabl on synthetic datasets and fve independent clinical studies demonstrates improved biomarker sparsity and reliability compared to commonly used
 sparsity-promoting regularization methods while maintaining predictive performance; it distills datasets containing 1,400–35,000 features down to 4–34 candidate biomarkers. Stabl extends to multi-omic integration tasks, enabling biological interpretation of complex predictive models, as it hones in on a shortlist of proteomic, metabolomic and cytometric events predicting labor onset, microbial biomarkers of pre-term birth and a pre-operative immune signature of post-surgical infections. 
+
+Full content: https://rdcu.be/du2gB
+
+### Cite us
+
+```
+Hédou, J., Marić, I., Bellan, G. et al. Discovery of sparse, reliable omic biomarkers with Stabl. Nat Biotechnol (2024). https://doi.org/10.1038/s41587-023-02033-x
+```
+
+or by following this [link](https://www.nature.com/articles/s41587-023-02033-x#citeas)
 
 ## Light-weight version
 
@@ -239,9 +250,3 @@ The "Sample Data" folder contains data for the following use cases:
 * **Outcome**: Preterm (`609`) Vs. Non-preterm (`960`) - 580 patients
 * **Taxonomy**: `1569` samples — `3725` biomarkers
 * **Phylotype**: `1569` samples — `5468` biomarkers
-
-## Cite
-Julien Hédou, Ivana Maric, Grégoire Bellan, Jakob Einhaus et al. Stabl: sparse and reliable biomarker discovery in predictive modeling 
-of high-dimensional omic data, 27 February 2023, PREPRINT (Version 1) available at Research Square 
-[https://doi.org/10.21203/rs.3.rs-2609859/v1]
-  
