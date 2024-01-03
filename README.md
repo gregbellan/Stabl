@@ -250,7 +250,3 @@ The "Sample Data" folder contains data for the following use cases:
 * **Outcome**: Preterm (`609`) Vs. Non-preterm (`960`) - 580 patients
 * **Taxonomy**: `1569` samples — `3725` biomarkers
 * **Phylotype**: `1569` samples — `5468` biomarkers
-Julien Hedou, Ivana Maric, Grégoire Bellan et al. Stabl: sparse and reliable biomarker discovery in predictive modeling 
-of high-dimensional omic data, 27 February 2023, PREPRINT (Version 1) available at Research Square 
-[https://doi.org/10.21203/rs.3.rs-2609859/v1]
-  
