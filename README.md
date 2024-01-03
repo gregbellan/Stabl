@@ -1,7 +1,7 @@
 <img width="100%" alt="STABL" src="./front_page.png">
 
 # Discovery of sparse, reliable omic biomarkers with Stabl
-[![DOI](https://img.shields.io/badge/DOI-doi:10.5061/dryad.stqjq2c7d-blue.svg)](https://doi.org/10.1038/s41587-023-02033-x)
+[![DOI](https://img.shields.io/badge/DOI-doi:10.1038/s41587--023--02033--x-blue.svg)](https://doi.org/10.1038/s41587-023-02033-x)
 [![Python version](https://img.shields.io/badge/Python-3.7%E2%80%933.12-blue.svg)](https://github.com/gregbellan/Stabl)
 [![BSD 3-Clause Clear license](https://img.shields.io/badge/License-BSD%203%E2%80%93Clause-yellow.svg)](https://github.com/gregbellan/Stabl/blob/main/LICENSE)
 [![BSD 3-Clause Clear license](https://img.shields.io/badge/Open-Source-orange.svg)](https://github.com/gregbellan/Stabl/blob/main/LICENSE)
