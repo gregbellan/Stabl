@@ -25,12 +25,6 @@ class UnionFind(object):
     union-find algorithm.  Only works if elements are immutable
     objects.
 
-    Worst case for union and find: :math:`(N + M \log^* N)`, with
-    :math:`N` elements and :math:`M` unions. The function
-    :math:`\log^*` is the number of times needed to take :math:`\log`
-    of a number until reaching 1. In practice, the amortized cost of
-    each operation is nearly linear [1]_.
-
     Terms
     -----
     Component
@@ -59,9 +53,9 @@ class UnionFind(object):
         Number of elements.
 
     n_comps : int
-        Number of distjoint sets or components.
+        Number of disjoint sets or components.
 
-    Implements
+    Methods
     ----------
     __len__
         Calling ``len(uf)`` (where ``uf`` is an instance of ``UnionFind``)
@@ -282,7 +276,7 @@ class UnionFind(object):
         memory.
 
         But this behaviour should not be relied on.  There may be
-        inconsitency arising from such assumptions or lack thereof.
+        inconsistency arising from such assumptions or lack thereof.
 
         If you want to do any operation on these sets, use caution.
         For example, instead of
@@ -311,7 +305,7 @@ class UnionFind(object):
         Returns
         -------
         dict
-            A dict with the semantics: `elt -> component contianing elt`.
+            A dict with the semantics: `elt -> component containing elt`.
 
         """
         elts = np.array(self._elts)

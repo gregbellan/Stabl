@@ -6,6 +6,55 @@ from sklearn.metrics import roc_auc_score, r2_score, average_precision_score, \
 from sklearn.model_selection import RepeatedKFold, cross_val_predict, \
     ParameterGrid, LeaveOneOut
 from sklearn.base import clone
+from sklearn.svm import l1_min_c
+
+
+def auto_mode_lambda_grid(X, y, task_type, l1_ratio=None, n_lambda=30):
+    """Return the optimized lambda_grid for a linear estimator with l1_ratio.
+
+    Parameters
+    ----------
+    X : array-like, shape=(n_repeats, n_features)
+        Input data matrix
+    y : array-like, shape=(n_repeats, )
+        Outcomes
+    task_type : str
+        The type of task to perform. It is either "classification" or "regression".
+    l1_ratio : float or list of floats. Default=None.
+        The elastic net mixing parameter, with `0 < l1_ratio <= 1`. It can be a list of floats.
+        If None, the base_estimator is supposed to be a linear model without a l1_ratio attribute.
+    n_lambda : int
+        Number of lambda to test. If l1_ratio is a list, n_lambda is the number of lambda for each l1_ratio.
+
+    Returns
+    -------
+    lambda_grid : dict of parameters
+        Optimized lambda_grid for the base_estimator
+    """
+    if l1_ratio is None:
+        l1_ratio = 1. if l1_ratio is None else l1_ratio
+    elif isinstance(l1_ratio, float):
+        l1_ratio = [l1_ratio]
+
+    def get_optimal_params(l1_r):
+        if task_type == "classification":
+            min_C = l1_min_c(X, y, loss="log")
+            params = {"C": np.linspace(min_C, min_C * 100, n_lambda)}
+        else:
+            l_max = np.linalg.norm(X.T @ y, np.inf) / (X.shape[0] * l1_r)
+            params = {"alpha": np.geomspace(l_max / 30, l_max + 5, n_lambda)}
+        return params
+
+    if isinstance(l1_ratio, float):
+        lambda_grid = get_optimal_params(l1_ratio)
+    else:
+        lambda_grid = []
+        for l1 in l1_ratio:
+            l1_ratio_params = get_optimal_params(l1)
+            l1_ratio_params.update({"l1_ratio": [l1]})
+            lambda_grid.append(l1_ratio_params)
+
+    return lambda_grid
 
 
 def fit_predict(estimator, X, y, train, test, task_type):

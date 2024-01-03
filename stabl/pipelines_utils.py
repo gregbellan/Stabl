@@ -2,20 +2,16 @@ import os
 from pathlib import Path
 import pandas as pd
 import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-from scipy.stats import mannwhitneyu
+from sklearn.feature_selection._base import _get_feature_importances
+from sklearn.feature_selection._from_model import _calculate_threshold
 
 from .utils import compute_CI, permutation_test_between_clfs
-from .visualization import scatterplot_regression_predictions, boxplot_binary_predictions, plot_roc, \
-    plot_prc
+from .visualization import scatterplot_regression_predictions, boxplot_binary_predictions, plot_roc, plot_prc
 from .metrics import jaccard_matrix
 from sklearn.metrics import roc_auc_score, average_precision_score, r2_score, mean_squared_error, mean_absolute_error
 
 from scipy import stats
 from scipy.stats import mannwhitneyu
-from sklearn.feature_selection._base import _get_feature_importances
-from sklearn.feature_selection._from_model import _calculate_threshold
 from sklearn.model_selection import GridSearchCV
 
 
@@ -43,17 +39,12 @@ def save_plots(predictions_dict, y, task_type, save_path):
     save_path: Path or str
         Where to save the plots
 
-    use_median_preds: bool, default=True
-        If True the function will take for each predictions_dict value the median over the columns. This corresponds to
-        the case of cross-validation where we have some predictions at each fold that we want to median from.
-
     """
     for name, predictions in predictions_dict.items():
         print(name, predictions)
         saving_path = Path(save_path, name)
         os.makedirs(saving_path, exist_ok=True)
-        pd.concat(
-            [predictions, y.loc[predictions.index]], axis=1).to_csv(
+        pd.concat([predictions, y.loc[predictions.index]], axis=1).to_csv(
             os.path.join(saving_path, f"{name} predictions.csv")
         )
 
@@ -64,7 +55,7 @@ def save_plots(predictions_dict, y, task_type, save_path):
                 show_CI=True,
                 export_file=True,
                 show_fig=False,
-                paths=os.path.join(saving_path, f"{name} ROC.pdf")
+                path=os.path.join(saving_path, f"{name} ROC.pdf")
             )
 
             plot_prc(
@@ -81,7 +72,7 @@ def save_plots(predictions_dict, y, task_type, save_path):
                 y_preds=predictions,
                 export_file=True,
                 show_fig=False,
-                paths=os.path.join(saving_path, f"{name} Boxplot of median predictions.pdf")
+                path=os.path.join(saving_path, f"{name} Boxplot of median predictions.pdf")
             )
 
         elif task_type == "regression":
@@ -183,6 +174,8 @@ def compute_scores_table(
                 model_mae = mean_absolute_error(y, preds)
                 model_mae_CI = compute_CI(y, preds, scoring="mae")
                 cell_value = f"{model_mae:.3f} [{model_mae_CI[0]:.3f}, {model_mae_CI[1]:.3f}]"
+            else:
+                raise ValueError(f"Metric not recognized.")
 
             table_of_scores.loc[model, metric] = cell_value
 
@@ -234,8 +227,12 @@ def compute_pvalues_table(
         elif task_type == "regression":
             scores_columns = ["Prediction"]
 
-    p_values_dict = {s: pd.DataFrame(columns=predictions_dict.keys(
-    ), index=predictions_dict.keys()) for s in scores_columns}
+    p_values_dict = {
+        s: pd.DataFrame(
+            columns=np.array(predictions_dict.keys()),
+            index=np.array(predictions_dict.keys())
+        ) for s in scores_columns
+    }
 
     for metric in scores_columns:
         p_values_df = p_values_dict[metric]
@@ -375,8 +372,16 @@ def compute_features_table(
 class BenchmarkWrapper():
     """Wrapper for benchmarking models with basic implement of necessary methods.
     """
-
-    def __init__(self, model, fit=None, predict=None, use_predict_proba=True, get_support=None, get_importances=None, threshold=1e-5) -> None:
+    def __init__(
+            self,
+            model,
+            fit=None,
+            predict=None,
+            use_predict_proba=True,
+            get_support=None,
+            get_importances=None,
+            threshold=1e-5
+    ) -> None:
         """Initiate the wrapper.
 
         Parameters
@@ -489,20 +494,22 @@ class BenchmarkWrapper():
         """ Get the feature importances of the model and return the absolute value. """
         try:
             scores = _get_feature_importances(
-                estimator=self.model.best_estimator_ if isinstance(self.model, GridSearchCV) else self.model, getter="auto", transform_func=None).flatten()
+                estimator=self.model.best_estimator_ if isinstance(
+                    self.model, GridSearchCV
+                ) else self.model, getter="auto", transform_func=None).flatten()
             res = np.abs(scores)
             return res
         except ValueError:
             raise NotImplemented(
-                f"The model does not have the method 'get_importances' \
-                    and there is no way to retreive the feature importances. \
-                        Please provide it.")
+                f"The model does not have the method 'get_importances' and there is no way to retrieve "
+                f"the feature importances. Please provide it.")
 
     def _get_support(self, indices=False):
         """ Get the support of the model. """
-        scores = self.get_importances()
+        scores = self._get_importances()
         threshold = _calculate_threshold(self.model, scores, self.threshold)
         support = scores > threshold
         if indices:
             return np.where(support)[0]
         return support.astype(int)
+

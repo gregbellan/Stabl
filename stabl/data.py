@@ -23,7 +23,7 @@ task_type: str
 
 
 def load_onset_of_labor(data_path):
-    # countinuous outcome dataset with validation set multi-omics
+    # continuous outcome dataset with validation set multi-omics
     patients_id = pd.read_csv(
         join(data_path, "Training", "ID.csv"), index_col=0).Id
 
@@ -60,7 +60,7 @@ def load_onset_of_labor(data_path):
 
 
 def load_dream(data_path):
-    # countinuous outcome dataset with validation set multi-omics
+    # continuous outcome dataset with validation set multi-omics
     patients_id = pd.read_csv(join(data_path, "Patients_id.csv"), index_col=0).participant_id
 
     # importing the training data
@@ -80,7 +80,7 @@ def load_dream(data_path):
 
 
 def load_onset_of_labor_cv(data_path):
-    # countinuous outcome dataset without validation set multi-omics
+    # continuous outcome dataset without validation set multi-omics
     y_train = pd.read_csv(
         join(data_path, "Training", "DOS.csv"), index_col=0).DOS
     patients_id = pd.read_csv(
