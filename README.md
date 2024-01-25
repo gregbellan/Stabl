@@ -16,7 +16,8 @@
 [![GitHub watchers](https://img.shields.io/github/watchers/gregbellan/Stabl.svg?style=social&label=Watch&maxAge=2592000)](https://GitHub.com/gregbellan/Stabl/watchers/)
 
 This is a scikit-learn compatible Python implementation of Stabl, coupled with useful functions and
-example notebooks to rerun the analyses on the different use cases located in the `sample data` folder
+example notebooks to rerun the analyses on the different use cases located in the `sample data` folder.
+The original idea of Stabl was developed at Stanford University (v0). This implementation and all related improvements were done at SurgeCare (v1, v2, v3).
 
 
 ## Abstract
