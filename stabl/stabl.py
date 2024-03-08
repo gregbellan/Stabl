@@ -560,16 +560,15 @@ def plot_stabl_path(
             )
 
         elif stabl.artificial_type is not None:
-            if not stabl.pairwise:
-                ax.plot(
-                    x_grid,
-                    stabl.stabl_scores_artificial_[:, o].T,
-                    color="gray",
-                    ls=":",
-                    alpha=.4,
-                    lw=1,
-                    label="Artificial features"
-                )
+            ax.plot(
+                x_grid,
+                stabl.stabl_scores_artificial_[:, o].T,
+                color="gray",
+                ls=":",
+                alpha=.4,
+                lw=1,
+                label="Artificial features"
+            )
 
             ax.plot(
                 x_grid,
