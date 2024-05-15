@@ -92,7 +92,6 @@ multi_omic_stabl_cv(
     X_train,
     y_train,
     outer_splitter=outter_cv,
-    inner_splitter=chosen_inner_cv,
     estimators=estimators,
     task_type=task_type,
     save_path="./Benchmarks results/Results SSI",
