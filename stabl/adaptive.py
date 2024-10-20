@@ -214,14 +214,6 @@ class ALogitLasso(LogisticRegression):
     max_iter : int, default=100
         Maximum number of iterations taken for the solvers to converge.
 
-    multi_class : {'auto', 'ovr', 'multinomial'}, default='auto'
-        If the option chosen is 'ovr', then a binary problem is fit for each
-        label. For 'multinomial' the loss minimised is the multinomial loss fit
-        across the entire probability distribution, *even when the data is
-        binary*. 'multinomial' is unavailable when solver='liblinear'.
-        'auto' selects 'ovr' if the data is binary, or if solver='liblinear',
-        and otherwise selects 'multinomial'.
-
     verbose : int, default=0
         For the liblinear and lbfgs solvers set verbose to any positive
         number for verbosity.
@@ -264,7 +256,6 @@ class ALogitLasso(LogisticRegression):
         random_state=None,
         solver="liblinear",
         max_iter=int(1e6),
-        multi_class="auto",
         verbose=0,
         warm_start=False,
         n_jobs=None,
@@ -283,7 +274,6 @@ class ALogitLasso(LogisticRegression):
             random_state=random_state,
             solver=solver,
             max_iter=max_iter,
-            multi_class=multi_class,
             verbose=verbose,
             warm_start=warm_start,
             n_jobs=n_jobs,
