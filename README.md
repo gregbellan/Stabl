@@ -64,7 +64,7 @@ In order to install the light-weight version of the library, you have two option
 1. Install directly from github:
 
 ```
-pip install git+https://github.com/gregbellan/Stabl.git@v1.0.0-lw
+pip install git+https://github.com/gregbellan/Stabl.git@v1.0.1-lw
 ```
 2. Clone the repository and install the library:
 
