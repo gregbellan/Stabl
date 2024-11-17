@@ -459,6 +459,10 @@ def plot_stabl_path(
     -------
     figure, axis
     """
+    print("HEHO HEHO")
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    ax[0].plot(np.arange(42))
+    plt.show()
 
     check_is_fitted(stabl, 'stabl_scores_')
 
@@ -475,6 +479,7 @@ def plot_stabl_path(
     order_list = []
     different_params = stabl.get_different_parameters()
     nb_different_params = len(different_params)
+    print(nb_different_params)
     if nb_different_params <= 1:
         if 'alpha' in stabl.fitted_lambda_grid_:
             x_grid_tmp = np.min(stabl.fitted_lambda_grid_["alpha"]) / stabl.fitted_lambda_grid_["alpha"]
@@ -484,6 +489,14 @@ def plot_stabl_path(
         elif 'C' in stabl.fitted_lambda_grid_:
             x_grid_tmp = stabl.fitted_lambda_grid_["C"] / np.max(stabl.fitted_lambda_grid_["C"])
             order_list = [np.arange(len(stabl.fitted_lambda_grid_["C"]))]
+            x_grid_list = [x_grid_tmp]
+            x_padding_list = [0]
+        elif len(stabl.fitted_lambda_grid_.keys()) == 1:
+            print("C'est 1 !")
+            param = list(stabl.fitted_lambda_grid_.keys())[0]
+            print(f"Les paramètres sont {param} ! :-)")
+            x_grid_tmp = stabl.fitted_lambda_grid_[param] / np.max(stabl.fitted_lambda_grid_[param])
+            order_list = [np.arange(len(stabl.fitted_lambda_grid_[param]))]
             x_grid_list = [x_grid_tmp]
             x_padding_list = [0]
     elif nb_different_params == 2:
@@ -611,7 +624,7 @@ def plot_stabl_path(
     if not show_fig:
         plt.close()
 
-    return fig, ax, x_list, x_order
+    return fig, ax, x_list, x_order, "MABITE"
 
 
 def save_stabl_results(
