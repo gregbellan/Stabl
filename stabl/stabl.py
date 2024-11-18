@@ -459,10 +459,6 @@ def plot_stabl_path(
     -------
     figure, axis
     """
-    print("HEHO HEHO")
-    fig, ax = plt.subplots(1, 1, figsize=figsize)
-    ax[0].plot(np.arange(42))
-    plt.show()
 
     check_is_fitted(stabl, 'stabl_scores_')
 
@@ -479,7 +475,6 @@ def plot_stabl_path(
     order_list = []
     different_params = stabl.get_different_parameters()
     nb_different_params = len(different_params)
-    print(nb_different_params)
     if nb_different_params <= 1:
         if 'alpha' in stabl.fitted_lambda_grid_:
             x_grid_tmp = np.min(stabl.fitted_lambda_grid_["alpha"]) / stabl.fitted_lambda_grid_["alpha"]
@@ -491,10 +486,8 @@ def plot_stabl_path(
             order_list = [np.arange(len(stabl.fitted_lambda_grid_["C"]))]
             x_grid_list = [x_grid_tmp]
             x_padding_list = [0]
-        elif len(stabl.fitted_lambda_grid_.keys()) == 1:
-            print("C'est 1 !")
-            param = list(stabl.fitted_lambda_grid_.keys())[0]
-            print(f"Les paramètres sont {param} ! :-)")
+        elif nb_different_params == 1:
+            param = different_params[0]
             x_grid_tmp = stabl.fitted_lambda_grid_[param] / np.max(stabl.fitted_lambda_grid_[param])
             order_list = [np.arange(len(stabl.fitted_lambda_grid_[param]))]
             x_grid_list = [x_grid_tmp]
@@ -502,20 +495,36 @@ def plot_stabl_path(
     elif nb_different_params == 2:
         params = list(ParameterGrid(stabl.fitted_lambda_grid_))
         ordered_params = dict()
-        for i, k in enumerate(params):
-            l1_ratio = k["l1_ratio"]
-            penalty = k["alpha"] if "alpha" in k else k["C"]
-            if l1_ratio in ordered_params:
-                order = ordered_params[l1_ratio][0]
-                x_grid = ordered_params[l1_ratio][1]
-            else:
-                order = []
-                x_grid = []
-            order.append(i)
-            x_grid.append(penalty)
-            ordered_params[l1_ratio] = (order, x_grid)
-        figsize = (figsize[0] * len(ordered_params.keys()), figsize[1])
-        x_padding = 0
+        if "l1_ratio" in different_params and ("alpha" in different_params or "C" in different_params):
+            for i, k in enumerate(params):
+                l1_ratio = k["l1_ratio"]
+                penalty = k["alpha"] if "alpha" in k else k["C"]
+                if l1_ratio in ordered_params:
+                    order = ordered_params[l1_ratio][0]
+                    x_grid = ordered_params[l1_ratio][1]
+                else:
+                    order = []
+                    x_grid = []
+                order.append(i)
+                x_grid.append(penalty)
+                ordered_params[l1_ratio] = (order, x_grid)
+            figsize = (figsize[0] * len(ordered_params.keys()), figsize[1])
+            x_padding = 0
+        else:
+            for i, k in enumerate(params):
+                l1_ratio = k[different_params[0]]
+                penalty = k[different_params[1]]
+                if l1_ratio in ordered_params:
+                    order = ordered_params[l1_ratio][0]
+                    x_grid = ordered_params[l1_ratio][1]
+                else:
+                    order = []
+                    x_grid = []
+                order.append(i)
+                x_grid.append(penalty)
+                ordered_params[l1_ratio] = (order, x_grid)
+            figsize = (figsize[0] * len(ordered_params.keys()), figsize[1])
+            x_padding = 0
         for l1_ratio in sorted(ordered_params.keys()):
             order = np.array(ordered_params[l1_ratio][0])
             penalties = np.array(ordered_params[l1_ratio][1])
@@ -523,6 +532,8 @@ def plot_stabl_path(
                 x_grid = np.min(penalties) / penalties
             elif "C" in different_params:
                 x_grid = penalties / np.max(penalties)
+            else:
+                x_grid = penalties
             x_padding += np.max(x_grid) - np.min(x_grid) + 1e-5
             x_grid_list.append(x_grid)
             order_list.append(order)
@@ -624,7 +635,7 @@ def plot_stabl_path(
     if not show_fig:
         plt.close()
 
-    return fig, ax, x_list, x_order, "MABITE"
+    return fig, ax, x_list, x_order
 
 
 def save_stabl_results(
