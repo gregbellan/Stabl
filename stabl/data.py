@@ -141,7 +141,7 @@ def load_covid_19(data_path):
     X_val = pd.read_csv(join(data_path, "Validation",
                         "Validation_proteomics.csv"), index_col=0)
     y_val = ~pd.read_csv(join(data_path, "Validation",
-                         "Validation_outcome(WHO.0 >= 5).csv"), index_col=0).iloc[:, 0]
+                         "Validation_outcome_covid19.csv"), index_col=0).iloc[:, 0]
 
     X_train = {
         "Proteomics": X_train
