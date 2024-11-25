@@ -139,13 +139,16 @@ def multi_omic_stabl_cv(
     if early_fusion:
         models += ["EF " + model for model in models if "STABL" not in model]
 
-    lasso = estimators["lasso"]
-    alasso = estimators["alasso"]
-    en = estimators["en"]
+    #lasso = estimators["lasso"]
+    #alasso = estimators["alasso"]
+    #en = estimators["en"]
+    #rf = estimators["rf"]
 
-    stabl = estimators["stabl_lasso"]
-    stabl_alasso = estimators["stabl_alasso"]
+    stabl_lasso = estimators["stabl_lasso"]
+    #stabl_alasso = estimators["stabl_alasso"]
     stabl_en = estimators["stabl_en"]
+    stabl_rf = estimators["stabl_rf"]
+    stabl_xgb = estimators["stabl_xgb"]
 
     os.makedirs(Path(save_path, "Training CV"), exist_ok=True)
     os.makedirs(Path(save_path, "Summary"), exist_ok=True)
@@ -210,18 +213,18 @@ def multi_omic_stabl_cv(
             if "STABL Lasso" in models:
                 # fit STABL Lasso
                 print("Fitting of STABL Lasso")
-                stabl.fit(X_tmp_std, y_tmp, groups=groups)
-                tmp_sel_features = list(stabl.get_feature_names_out())
+                stabl_lasso.fit(X_tmp_std, y_tmp, groups=groups)
+                tmp_sel_features = list(stabl_lasso.get_feature_names_out())
                 fold_selected_features["STABL Lasso"].extend(tmp_sel_features)
                 print(
                     f"STABL Lasso finished on {omic_name} ({X_tmp.shape[0]} samples);"
                     f" {len(tmp_sel_features)} features selected"
                 )
-                stabl_features_dict["STABL Lasso"][omic_name].loc[f'Fold n°{k}', "min FDP+"] = stabl.min_fdr_
-                stabl_features_dict["STABL Lasso"][omic_name].loc[f'Fold n°{k}', "Threshold"] = stabl.fdr_min_threshold_
+                stabl_features_dict["STABL Lasso"][omic_name].loc[f'Fold n°{k}', "min FDP+"] = stabl_lasso.min_fdr_
+                stabl_features_dict["STABL Lasso"][omic_name].loc[f'Fold n°{k}', "Threshold"] = stabl_lasso.fdr_min_threshold_
                 if k == 1:
                     save_stabl_results(
-                        stabl=stabl,
+                        stabl=stabl_lasso,
                         path=Path(save_path, "Training CV", f"STABL Lasso results on {omic_name}"),
                         df_X=X_tmp_std,
                         y=y_tmp,
@@ -265,6 +268,48 @@ def multi_omic_stabl_cv(
                     save_stabl_results(
                         stabl=stabl_en,
                         path=Path(save_path, "Training CV", f"STABL ElasticNet results on {omic_name}"),
+                        df_X=X_tmp_std,
+                        y=y_tmp,
+                        task_type=task_type
+                    )
+                    
+            if "STABL RandomForest" in models:
+                # fit STABL Lasso
+                print("Fitting of STABL RandomForest")
+                stabl_rf.fit(X_tmp_std, y_tmp, groups=groups)
+                tmp_sel_features = list(stabl_rf.get_feature_names_out())
+                fold_selected_features["STABL RandomForest"].extend(tmp_sel_features)
+                print(
+                    f"STABL RandomForest finished on {omic_name} ({X_tmp.shape[0]} samples);"
+                    f" {len(tmp_sel_features)} features selected"
+                )
+                stabl_features_dict["STABL RandomForest"][omic_name].loc[f'Fold n°{k}', "min FDP+"] = stabl_rf.min_fdr_
+                stabl_features_dict["STABL RandomForest"][omic_name].loc[f'Fold n°{k}', "Threshold"] = stabl_rf.fdr_min_threshold_
+                if k == 1:
+                    save_stabl_results(
+                        stabl=stabl_rf,
+                        path=Path(save_path, "Training CV", f"STABL RandomForest results on {omic_name}"),
+                        df_X=X_tmp_std,
+                        y=y_tmp,
+                        task_type=task_type
+                    )
+            
+            if "STABL XGBoost" in models:
+                # fit STABL Lasso
+                print("Fitting of STABL XGBoost")
+                stabl_xgb.fit(X_tmp_std, y_tmp, groups=groups)
+                tmp_sel_features = list(stabl_xgb.get_feature_names_out())
+                fold_selected_features["STABL XGBoost"].extend(tmp_sel_features)
+                print(
+                    f"STABL XGBoost finished on {omic_name} ({X_tmp.shape[0]} samples);"
+                    f" {len(tmp_sel_features)} features selected"
+                )
+                stabl_features_dict["STABL XGBoost"][omic_name].loc[f'Fold n°{k}', "min FDP+"] = stabl_xgb.min_fdr_
+                stabl_features_dict["STABL XGBoost"][omic_name].loc[f'Fold n°{k}', "Threshold"] = stabl_xgb.fdr_min_threshold_
+                if k == 1:
+                    save_stabl_results(
+                        stabl=stabl_xgb,
+                        path=Path(save_path, "Training CV", f"STABL XGBoost results on {omic_name}"),
                         df_X=X_tmp_std,
                         y=y_tmp,
                         task_type=task_type
@@ -317,6 +362,22 @@ def multi_omic_stabl_cv(
                     f" {len(tmp_sel_features)} features selected"
                 )
                 predictions_dict_late_fusion["ElasticNet"][omic_name].loc[test_idx_tmp, f"Fold n°{k}"] = predictions
+        
+        if "RandomForest" in models:
+                # __Lasso__
+                print("Fitting of RandomForest")
+                model = clone(rf)
+                if task_type == "binary":
+                    predictions = model.fit(X_tmp_std, y_tmp, groups=groups).predict_proba(X_test_tmp_std)[:, 1]
+                else:
+                    predictions = model.fit(X_tmp_std, y_tmp, groups=groups).predict(X_test_tmp_std)
+                tmp_sel_features = list(X_tmp_std.columns[np.where(model.best_estimator_.feature_importances_.flatten())])
+                fold_selected_features["RandomForest"].extend(tmp_sel_features)
+                print(
+                    f"RandomForest finished on {omic_name} ({X_tmp_std.shape[0]} samples);"
+                    f" {len(tmp_sel_features)} features selected"
+                )
+                predictions_dict_late_fusion["RandomForest"][omic_name].loc[test_idx_tmp, f"Fold n°{k}"] = predictions
 
         for model in filter(lambda x: "STABL" in x, models):
             X_train = X_tot.loc[train_idx, fold_selected_features[model]]

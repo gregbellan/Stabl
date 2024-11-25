@@ -547,7 +547,7 @@ def plot_stabl_path(
     x_list = []
 
     for i, o in enumerate(order_list):
-        x_grid = x_grid_list[i]
+        x_grid = np.float64(x_grid_list[i])
         x_padding = x_padding_list[i]
         x_grid += x_padding
         for j in x_grid:
