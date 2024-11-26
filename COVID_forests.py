@@ -1,3 +1,5 @@
+import os
+import shutil
 import numpy as np
 from stabl import data
 from stabl.multi_omic_pipelines import multi_omic_stabl_cv
@@ -47,18 +49,20 @@ alasso_cv = GridSearchCV(
 
 # RandomForest
 rf = RandomForestClassifier(random_state=42)
+rf_grid = {"n_estimators": [50, 100], "max_depth": [3, 5, 7]}
 rf_cv = GridSearchCV(
-    rf, scoring='roc_auc', param_grid={"n_estimators": [50, 100], "max_depth": [3, 5]}, cv=chosen_inner_cv, n_jobs=-1
+    rf, scoring='roc_auc', param_grid=rf_grid, cv=chosen_inner_cv, n_jobs=-1
 )
 
 # XGBoost
 xgb = XGBClassifier(random_state=42)
+xgb_grid = {"min_child_weight": [1, 2], "max_depth": [3, 5, 7]}
 xgb_cv = GridSearchCV(
-    xgb, scoring='roc_auc', param_grid={"min_child_weight": [1, 2], "max_depth": [3, 5]}, cv=chosen_inner_cv, n_jobs=-1
+    xgb, scoring='roc_auc', param_grid=xgb_grid, cv=chosen_inner_cv, n_jobs=-1
 )
 
 # Stabl
-stabl = Stabl(
+stabl_lasso = Stabl(
     base_estimator=lasso,
     n_bootstraps=1000,
     artificial_type=artificial_type,
@@ -71,13 +75,13 @@ stabl = Stabl(
     verbose=1
 )
 
-stabl_alasso = clone(stabl).set_params(
+stabl_alasso = clone(stabl_lasso).set_params(
     base_estimator=alasso,
     lambda_grid={"C": np.linspace(0.01, 10, 10)},
     verbose=1
 )
 
-stabl_en = clone(stabl).set_params(
+stabl_en = clone(stabl_lasso).set_params(
     base_estimator=en,
     n_bootstraps=100,
     lambda_grid=[
@@ -86,47 +90,53 @@ stabl_en = clone(stabl).set_params(
     verbose=1
 )
 
-stabl_rf = clone(stabl).set_params(
+stabl_rf = clone(stabl_lasso).set_params(
     base_estimator=rf,
     n_bootstraps=100,
-    lambda_grid=[
-        {"n_estimators": [50, 100], "max_depth": [3, 5]}
-    ],
+    lambda_grid=[rf_grid],
     verbose=1
 )
 
-stabl_xgb = clone(stabl).set_params(
+stabl_xgb = clone(stabl_lasso).set_params(
     base_estimator=xgb,
     n_bootstraps=100,
-    lambda_grid=[
-        {"min_child_weight": [1, 2], "max_depth": [3, 5]}
-    ],
+    lambda_grid=[xgb_grid],
     verbose=1
 )
 
 estimators = {
-    #"lasso": lasso_cv,
-    #"alasso": alasso_cv,
-    #"en": en_cv,
-    #"rf": rf_cv,
-    #"xgb": xgb_cv,
+    "lasso": lasso_cv,
+    "alasso": alasso_cv,
+    "en": en_cv,
+    "rf": rf_cv,
+    "xgb": xgb_cv,
     
-    "stabl_lasso": stabl,
-    #"stabl_alasso": stabl_alasso,
+    "stabl_lasso": stabl_lasso,
+    "stabl_alasso": stabl_alasso,
     "stabl_en": stabl_en,
     "stabl_rf": stabl_rf,
     "stabl_xgb": stabl_xgb
 }
 models = [
+    "Lasso",
+    "ALasso",
+    "ElasticNet",
+    "RandomForest",
+    "XGBoost",
+    
     "STABL Lasso",
-    #"Lasso",
-    #"STABL ALasso",#, "ALasso",
-    "STABL ElasticNet",# "ElasticNet",
-    "STABL RandomForest",# "RandomForest",
-    "STABL XGBoost"#, "XGBoost"
+    "STABL ALasso",
+    "STABL ElasticNet",
+    "STABL RandomForest",
+    "STABL XGBoost"
 ]
 
 X_train, X_valid, y_train, y_valid, ids, task_type = data.load_covid_19("./Sample Data/COVID-19")
+
+save_path = "./Benchmarks results/Results COVID-19 Forests"
+
+if os.path.exists(save_path):
+    shutil.rmtree(save_path)
 
 print("Run CV on covid 19 dataset")
 print(ids)
@@ -136,10 +146,10 @@ multi_omic_stabl_cv(
     outer_splitter=outter_cv,
     estimators=estimators,
     task_type=task_type,
-    save_path="./Benchmarks results/Results COVID-19 Forests",
+    save_path=save_path,
     outer_groups=ids,
     early_fusion=False,
-    late_fusion=False,
+    late_fusion=True,
     n_iter_lf=1000,
     models=models
 )

@@ -283,7 +283,7 @@ class ALogitLasso(LogisticRegression):
             random_state=random_state,
             solver=solver,
             max_iter=max_iter,
-            multi_class=multi_class,
+            #multi_class=multi_class,
             verbose=verbose,
             warm_start=warm_start,
             n_jobs=n_jobs,

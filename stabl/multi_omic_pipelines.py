@@ -139,13 +139,14 @@ def multi_omic_stabl_cv(
     if early_fusion:
         models += ["EF " + model for model in models if "STABL" not in model]
 
-    #lasso = estimators["lasso"]
-    #alasso = estimators["alasso"]
-    #en = estimators["en"]
-    #rf = estimators["rf"]
+    lasso = estimators["lasso"]
+    alasso = estimators["alasso"]
+    en = estimators["en"]
+    rf = estimators["rf"]
+    xgb = estimators["xgb"]
 
     stabl_lasso = estimators["stabl_lasso"]
-    #stabl_alasso = estimators["stabl_alasso"]
+    stabl_alasso = estimators["stabl_alasso"]
     stabl_en = estimators["stabl_en"]
     stabl_rf = estimators["stabl_rf"]
     stabl_xgb = estimators["stabl_xgb"]
@@ -363,7 +364,7 @@ def multi_omic_stabl_cv(
                 )
                 predictions_dict_late_fusion["ElasticNet"][omic_name].loc[test_idx_tmp, f"Fold n°{k}"] = predictions
         
-        if "RandomForest" in models:
+            if "RandomForest" in models:
                 # __Lasso__
                 print("Fitting of RandomForest")
                 model = clone(rf)
@@ -378,6 +379,22 @@ def multi_omic_stabl_cv(
                     f" {len(tmp_sel_features)} features selected"
                 )
                 predictions_dict_late_fusion["RandomForest"][omic_name].loc[test_idx_tmp, f"Fold n°{k}"] = predictions
+            
+            if "XGBoost" in models:
+                # __Lasso__
+                print("Fitting of XGBoost")
+                model = clone(xgb)
+                if task_type == "binary":
+                    predictions = model.fit(X_tmp_std, y_tmp, groups=groups).predict_proba(X_test_tmp_std)[:, 1]
+                else:
+                    predictions = model.fit(X_tmp_std, y_tmp, groups=groups).predict(X_test_tmp_std)
+                tmp_sel_features = list(X_tmp_std.columns[np.where(model.best_estimator_.feature_importances_.flatten())])
+                fold_selected_features["XGBoost"].extend(tmp_sel_features)
+                print(
+                    f"XGBoost finished on {omic_name} ({X_tmp_std.shape[0]} samples);"
+                    f" {len(tmp_sel_features)} features selected"
+                )
+                predictions_dict_late_fusion["XGBoost"][omic_name].loc[test_idx_tmp, f"Fold n°{k}"] = predictions
 
         for model in filter(lambda x: "STABL" in x, models):
             X_train = X_tot.loc[train_idx, fold_selected_features[model]]
@@ -425,6 +442,7 @@ def multi_omic_stabl_cv(
 
                 else:
                     raise ValueError("task_type not recognized.")
+                
         # __late fusion__
         if late_fusion:
             preds_lf = late_fusion_cv(
