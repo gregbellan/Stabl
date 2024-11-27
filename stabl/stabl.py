@@ -4,6 +4,7 @@ from warnings import warn
 import sys
 
 import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
