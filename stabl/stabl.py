@@ -808,13 +808,17 @@ def fit_bootstrapped_sample(
         base_estimator.set_params(groups=corr_groups)
     base_estimator.fit(X, y)
 
-    features_selection = SelectFromModel(
-        estimator=base_estimator,
-        threshold=threshold,
-        prefit=True
-    )
+    if isinstance(base_estimator,  (ALasso, ALogitLasso)) or base_estimator.__class__.__module__.startswith("sklearn.linear_model"):
+        features_selection = SelectFromModel(
+            estimator=base_estimator,
+            threshold=threshold,
+            prefit=True
+        )
 
-    return features_selection.get_support()
+        return features_selection.get_support()
+    else:
+        features_importance = base_estimator.feature_importances_
+        return features_importance / (max(features_importance) - min(features_importance))
 
 
 class Stabl(SelectorMixin, BaseEstimator):
