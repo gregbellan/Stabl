@@ -19,6 +19,7 @@ from sklearn.utils.validation import _check_feature_names_in, check_is_fitted
 from tqdm.autonotebook import tqdm
 from .unionfind import UnionFind
 import warnings
+from .adaptive import ALasso, ALogitLasso
 from .utils import auto_mode_lambda_grid
 from .visualization import boxplot_features, scatterplot_features
 
