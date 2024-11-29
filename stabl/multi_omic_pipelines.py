@@ -140,13 +140,11 @@ def multi_omic_stabl_cv(
         models += ["EF " + model for model in models if "STABL" not in model]
 
     lasso = estimators["lasso"]
-    alasso = estimators["alasso"]
     en = estimators["en"]
     rf = estimators["rf"]
     xgb = estimators["xgb"]
 
     stabl_lasso = estimators["stabl_lasso"]
-    stabl_alasso = estimators["stabl_alasso"]
     stabl_en = estimators["stabl_en"]
     stabl_rf = estimators["stabl_rf"]
     stabl_xgb = estimators["stabl_xgb"]
