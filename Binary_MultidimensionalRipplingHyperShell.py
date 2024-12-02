@@ -82,14 +82,14 @@ stabl_en = clone(stabl_lasso).set_params(
 stabl_rf = clone(stabl_lasso).set_params(
     base_estimator=rf,
     n_bootstraps=100,
-    lambda_grid=[rf_grid],
+    lambda_grid=rf_grid,
     verbose=1
 )
 
 stabl_xgb = clone(stabl_lasso).set_params(
     base_estimator=xgb,
     n_bootstraps=100,
-    lambda_grid=xgb_grid,
+    lambda_grid=[xgb_grid],
     verbose=1
 )
 
@@ -121,7 +121,7 @@ df = pd.read_csv("./Sample Data/Multidimensional Rippling Hyper-Shell/Multidimen
 X = df.drop(columns=["y_reg", "y_prob", "y_label"])
 y = df["y_label"]
 
-train_index = np.random.choice(X.index, 1000, replace=False)
+train_index = np.random.choice(X.index, 900, replace=False)
 X_train = X.loc[train_index]
 y_train = y.loc[train_index]
 X_train = {"omics": X_train}
