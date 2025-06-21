@@ -2,12 +2,14 @@ import os
 from pathlib import Path
 from warnings import warn
 import sys
+from packaging import version
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 from knockpy.knockoffs import GaussianSampler
+from sklearn import __version__ as sklearn_version
 from sklearn.base import BaseEstimator, clone
 from sklearn.feature_selection import SelectorMixin, SelectFromModel
 from sklearn.linear_model import LogisticRegression, Lasso, ElasticNet
@@ -1064,6 +1066,25 @@ class Stabl(SelectorMixin, BaseEstimator):
                 f"When injecting noise, the noise proportion must be between 0 and 1, "
                 f"got {self.artificial_proportion}"
             )
+        
+    def _validate_data(self, *args, **kwargs):
+        """Data validation method compatible with multiple versions of sklearn.
+        
+        For sklearn < 1.6.0, overloads BaseEstimator._validate_data, which is depricated in 1.6.0
+        and removed in 1.7.0. For sklearn >= 1.6.0, this method calls sklearn.utils.validation.validate_data,
+        which performs the equivalent functionality."""
+        
+        skl_ver = version.parse(sklearn_version)
+
+        if skl_ver >= version.parse("1.6.0"):
+            # for scikit-learn >= 1.6.0
+            from sklearn.utils.validation import validate_data
+            return validate_data(self, *args, **kwargs)
+        
+        else:
+            # for scikit-learn < 1.6.0
+            return BaseEstimator._validate_data(self, *args, **kwargs)
+        
 
     def _make_groups(self, X):
         """Make groups for self configuration.

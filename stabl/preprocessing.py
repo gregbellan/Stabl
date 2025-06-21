@@ -1,7 +1,10 @@
+from packaging import version
+
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.feature_selection import SelectorMixin
 from sklearn.utils.validation import check_is_fitted
+from sklearn import __version__ as sklearn_version
 
 
 def remove_low_info_samples(X, threshold=1.0):
@@ -131,3 +134,21 @@ class LowInfoFilter(SelectorMixin, BaseEstimator):
         # Useful to allow the use of nan values
         # For the transform function ;)
         return {"allow_nan": True}
+    
+    def _validate_data(self, *args, **kwargs):
+        """Data validation method compatible with multiple versions of sklearn.
+        
+        For sklearn < 1.6.0, overloads BaseEstimator._validate_data, which is depricated in 1.6.0
+        and removed in 1.7.0. For sklearn >= 1.6.0, this method calls sklearn.utils.validation.validate_data,
+        which performs the equivalent functionality."""
+        
+        skl_ver = version.parse(sklearn_version)
+
+        if skl_ver >= version.parse("1.6.0"):
+            # for scikit-learn >= 1.6.0
+            from sklearn.utils.validation import validate_data
+            return validate_data(self, *args, **kwargs)
+        
+        else:
+            # for scikit-learn < 1.6.0
+            return BaseEstimator._validate_data(self, *args, **kwargs)
