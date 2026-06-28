@@ -12,7 +12,7 @@ np.random.seed(random_seed)
 chosen_inner_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=5, random_state=42)
 outter_group_cv = GroupShuffleSplit(n_splits=100, test_size=0.2, random_state=42)
 
-artificial_type = "random permutation"
+artificial_type = "random_permutation"
 X_train, X_valid, y_train, y_valid, ids, task_type = data.load_dream("./Sample Data/Dream")
 y_train = y_train.astype(int)
 for name, df in X_train.items():
